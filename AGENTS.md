@@ -202,7 +202,11 @@ Design knowledge that is not obvious from the code alone:
   status + command echo, and `HidSharpTransport.ExchangeAsync` re-issues the exchange (up to
   `MaxQueryAttempts`) until the predicate holds, then throws so the poll loop keeps the last good value
   instead of publishing the 0. `FindCandidates` orders by interface ascending; `HidFamily` probes
-  each once and caches the answering path. Two entries for the same model (two identical mice) are
+  each once and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
+  `HidDeviceInfo` lists both (`FindCandidates` runs once per id) and `HidChannel.ProductId` says which is
+  in use. When a read fails `HidFamily` forgets the remembered interface, so the next poll probes again
+  and picks up a dongle-to-cable switch; without that, an unplugged-from-radio mouse whose dongle is
+  still in the PC would fail forever on the dongle. Two entries for the same model (two identical mice) are
   handled: `HidFamily` groups the candidates by physical unit (`PhysicalUnitKey` - USB serial, else the
   parent-instance token in the device path) and deals each entry a distinct unit in entry-id / unit-key
   order. Units with no serial are only distinguishable by port, so a re-plug can swap which entry is

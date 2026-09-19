@@ -2,15 +2,19 @@ using DeviceBatteryInfo.Core;
 
 namespace DeviceBatteryInfo.Sources.Hid;
 
-internal sealed record HidDeviceInfo(
-    string Name,
-    int ProductId,
-    BatterySourceKind Kind = BatterySourceKind.Mouse
-);
+/// <summary>A device and every USB product id it shows up as. A wireless mouse has one for its dongle and
+/// another for the cable, so list both.</summary>
+internal sealed record HidDeviceInfo(string Name, params int[] ProductIds)
+{
+    public BatterySourceKind Kind { get; init; } = BatterySourceKind.Mouse;
+}
 
 /// <summary>One open HID connection to a device.</summary>
-internal sealed class HidChannel(IHidTransport transport, string devicePath)
+internal sealed class HidChannel(IHidTransport transport, string devicePath, int productId)
 {
+    /// <summary>The product id this connection is on, to tell a dongle from a cable.</summary>
+    public int ProductId { get; } = productId;
+
     /// <summary>Sends the request and returns the first response <paramref name="isComplete"/> accepts.
     /// Throws when none does, so the poll keeps the last good value.</summary>
     public Task<byte[]> ExchangeAsync(

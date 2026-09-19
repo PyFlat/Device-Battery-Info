@@ -23,7 +23,10 @@ internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, R
     private const int ValueIndex = 10;
 
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
-        [new("DeathAdder V3 Pro", 0x00B7)];
+        [
+            new("DeathAdder V3 Pro", 0x00B7, 0x00B6), 
+            new("Basilisk V3 Pro", 0x00AB, 0x00AA)
+        ];
 
     public override async Task<BatteryReading> ReadAsync(
         HidChannel channel,
@@ -34,8 +37,7 @@ internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, R
         var percent = PercentFromRaw(
             await QueryAsync(channel, CommandBatteryLevel, cancellationToken)
         );
-        var charging =
-            await QueryAsync(channel, CommandChargingStatus, cancellationToken) == 1;
+        var charging = await QueryAsync(channel, CommandChargingStatus, cancellationToken) == 1;
 
         return new BatteryReading
         {

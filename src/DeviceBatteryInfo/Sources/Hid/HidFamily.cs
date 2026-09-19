@@ -40,12 +40,17 @@ internal sealed class HidFamily(
         {
             var model = (HidModel)byModel.First().Model;
             var slots = byModel.Select(e => e.Slot).OrderBy(s => s.Id, StringComparer.Ordinal).ToArray();
-            var candidates = transport.FindCandidates(
-                model.Protocol.VendorId,
-                model.Device.ProductId,
-                interfaceNumber: null,
-                model.Protocol.ReportLength
-            );
+            IReadOnlyList<HidCandidate> candidates =
+            [
+                .. model.Device.ProductIds.SelectMany(productId =>
+                    transport.FindCandidates(
+                        model.Protocol.VendorId,
+                        productId,
+                        interfaceNumber: null,
+                        model.Protocol.ReportLength
+                    )
+                ),
+            ];
 
             // One entry may use any interface. Two entries for the same model must not both claim
             // whichever unit answers first, so each gets its own.
@@ -71,12 +76,25 @@ internal sealed class HidFamily(
             for (var i = 0; i < slots.Length && i < units.Length; i++)
             {
                 var slot = slots[i];
-                var path = await ResolvePathAsync(model, slot, units[i], cancellationToken);
-                var channel = new HidChannel(transport, path);
+                var candidate = await ResolveAsync(model, slot, units[i], cancellationToken);
+                var channel = new HidChannel(transport, candidate.Path, candidate.ProductId);
                 sources.Add(
                     new DelegateBatterySource(
                         slot,
-                        async ct => await model.Protocol.ReadAsync(channel, model.Device, ct)
+                        async ct =>
+                        {
+                            try
+                            {
+                                return await model.Protocol.ReadAsync(channel, model.Device, ct);
+                            }
+                            catch (Exception exception)
+                                when (exception is not OperationCanceledException)
+                            {
+                                // The mouse may have switched between dongle and cable, so look again.
+                                _resolvedPaths.TryRemove(slot.Id, out _);
+                                throw;
+                            }
+                        }
                     )
                 );
             }
@@ -107,7 +125,7 @@ internal sealed class HidFamily(
         return "p:" + candidate.Path.ToLowerInvariant();
     }
 
-    private async Task<string> ResolvePathAsync(
+    private async Task<HidCandidate> ResolveAsync(
         HidModel model,
         BatterySlot slot,
         IReadOnlyList<HidCandidate> candidates,
@@ -116,17 +134,19 @@ internal sealed class HidFamily(
     {
         if (
             _resolvedPaths.TryGetValue(slot.Id, out var cached)
-            && candidates.Any(c => string.Equals(c.Path, cached, StringComparison.OrdinalIgnoreCase))
+            && candidates.FirstOrDefault(c =>
+                string.Equals(c.Path, cached, StringComparison.OrdinalIgnoreCase)
+            ) is { } known
         )
         {
-            return cached;
+            return known;
         }
 
         foreach (var candidate in candidates)
         {
             try
             {
-                var channel = new HidChannel(transport, candidate.Path);
+                var channel = new HidChannel(transport, candidate.Path, candidate.ProductId);
                 _ = await model.Protocol.ReadAsync(channel, model.Device, cancellationToken);
                 _resolvedPaths[slot.Id] = candidate.Path;
                 _logger.Information(
@@ -135,7 +155,7 @@ internal sealed class HidFamily(
                     candidate.InterfaceNumber,
                     candidate.ProductName
                 );
-                return candidate.Path;
+                return candidate;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -144,6 +164,6 @@ internal sealed class HidFamily(
         }
 
         // Nothing answered; keep the first path so the device shows as stale instead of disappearing.
-        return candidates[0].Path;
+        return candidates[0];
     }
 }

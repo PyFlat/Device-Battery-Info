@@ -13,18 +13,22 @@ Only add a device after you have read its battery on the real hardware.
 
 ## Another mouse from a known brand
 
-Add one line to `Devices` in `Sources/Razer/RazerProtocol.cs`: the name and the USB product id.
+Add one line to `Devices` in `Sources/Razer/RazerProtocol.cs`: the name and **every** USB product id the
+mouse shows up as.
 
 ```csharp
-public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
-[
-    new("DeathAdder V3 Pro", 0x00B7),
-    new("Basilisk V3 Pro", 0x00AA),
-];
+new("Some Wireless Mouse", 0x00AB, 0x00AA),   // dongle, cable
 ```
 
-The product id is in Device Manager, under the device's hardware ids (`VID_1532&PID_00AA`). If the new
-mouse needs a different request, branch on `device.ProductId` inside `ReadAsync`.
+A wireless mouse has one product id for its dongle and another when it is plugged in with the cable
+(Device Manager, hardware ids: `VID_1532&PID_00AB`). Leave the cable one out and the mouse disappears as
+soon as it is wired. Run the hardware test once in each mode to find them and to check that both answer:
+
+```
+dotnet test --filter Category=Hardware
+```
+
+If the new mouse needs a different request, branch on `channel.ProductId` inside `ReadAsync`.
 
 ## A new HID brand
 
