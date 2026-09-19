@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32.SafeHandles;
 
-namespace DeviceBatteryInfo.Sources.Razer;
+namespace DeviceBatteryInfo.Sources.Hid;
 
 /// <summary>
 /// A direct <c>hid.dll</c> feature-report round trip: open the device for read+write, and when the
@@ -13,7 +13,7 @@ namespace DeviceBatteryInfo.Sources.Razer;
 /// reach this interface at all; going through <c>hid.dll</c> directly (matching hidapi) can.
 /// </summary>
 [SupportedOSPlatform("windows")]
-internal static class NativeRazerHid
+internal static class NativeHid
 {
     private const uint GenericRead = 0x80000000;
     private const uint GenericWrite = 0x40000000;

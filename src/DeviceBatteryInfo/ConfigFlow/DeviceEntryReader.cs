@@ -9,6 +9,7 @@ internal static class DeviceEntryReader
 
     public static async Task<IReadOnlyList<BatterySlot>> ReadAsync(
         IIntegrationConfig config,
+        DeviceModelCatalog models,
         CancellationToken cancellationToken
     )
     {
@@ -38,7 +39,10 @@ internal static class DeviceEntryReader
             }
 
             var name = await Read(DeviceConfigKeys.Name) is { Length: > 0 } n ? n : entry.Title;
-            var type = DeviceConfigKeys.ParseType(await Read(DeviceConfigKeys.Type));
+            var typeValue = await Read(DeviceConfigKeys.Type);
+            // Entries written before the catalog was generic stored the model id as the type itself.
+            var model = models.ById(await Read(DeviceConfigKeys.CatalogDevice) ?? typeValue);
+            var type = model is null ? DeviceConfigKeys.ParseType(typeValue) : DeviceType.Catalog;
             var id = BatterySlots.Reserve(BatterySlots.Slug(name), used);
 
             slots.Add(
@@ -57,7 +61,13 @@ internal static class DeviceEntryReader
                         DeviceType.Bluetooth,
                         BluetoothFriendlyName: await Read(DeviceConfigKeys.BluetoothName)
                     ),
-                    DeviceType.RazerDeathAdderV3Pro => await ReadRazerAsync(id, name, Read),
+                    DeviceType.Catalog => new BatterySlot(
+                        id,
+                        name,
+                        model!.Kind,
+                        DeviceType.Catalog,
+                        CatalogDeviceId: model.Id
+                    ),
                     _ => new BatterySlot(
                         id,
                         name,
@@ -74,30 +84,6 @@ internal static class DeviceEntryReader
         }
 
         return slots;
-    }
-
-    private static async Task<BatterySlot> ReadRazerAsync(
-        string id,
-        string name,
-        Func<string, Task<string?>> read
-    )
-    {
-        var model = DeviceModelCatalog.ById(await read(DeviceConfigKeys.CatalogDevice));
-        var vendorId = model is { VendorId: > 0 }
-            ? model.VendorId
-            : DeviceConfigKeys.ParseUsbId(await read(DeviceConfigKeys.VendorId)) ?? 0x1532;
-        var productId = model is { ProductId: > 0 }
-            ? model.ProductId
-            : DeviceConfigKeys.ParseUsbId(await read(DeviceConfigKeys.ProductId)) ?? 0x00B7;
-
-        return new BatterySlot(
-            id,
-            name,
-            BatterySourceKind.Mouse,
-            DeviceType.RazerDeathAdderV3Pro,
-            VendorId: vendorId,
-            ProductId: productId
-        );
     }
 
     private static async Task<T> Retry<T>(Func<Task<T>> call, CancellationToken cancellationToken)

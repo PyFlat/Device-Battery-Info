@@ -1,5 +1,6 @@
 using DeviceBatteryInfo.ConfigFlow;
 using DeviceBatteryInfo.Sources.Bluetooth;
+using DeviceBatteryInfo.Sources.Hid;
 using DeviceBatteryInfo.Sources.Razer;
 using NUnit.Framework;
 
@@ -17,7 +18,7 @@ public sealed class DeviceDiscoveryHardwareTests
         Assume.That(OperatingSystem.IsWindows());
 
         var discovery = new WindowsDeviceDiscovery(
-            new HidSharpRazerTransport(Serilog.Core.Logger.None),
+            new HidSharpTransport(Serilog.Core.Logger.None),
             new PowerShellPnpBatteryReader()
         );
 

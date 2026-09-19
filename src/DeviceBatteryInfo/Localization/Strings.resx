@@ -222,12 +222,6 @@
     <data name="ConfigFlow.Device.Other.AddMissingLink" xml:space="preserve">
         <value>How to add a device that is not listed</value>
     </data>
-    <data name="ConfigFlow.Device.Brand.Razer" xml:space="preserve">
-        <value>Razer</value>
-    </data>
-    <data name="ConfigFlow.Device.Model.RazerDeathAdderV3Pro" xml:space="preserve">
-        <value>DeathAdder V3 Pro</value>
-    </data>
     <data name="ConfigFlow.Device.AdbAddress.Label" xml:space="preserve">
         <value>adb address (host:port)</value>
     </data>

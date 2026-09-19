@@ -11,8 +11,7 @@ public sealed record BatterySlot(
     string? BluetoothFriendlyName = null,
     string? AdbAddress = null,
     string? AdbExecutable = null,
-    int VendorId = 0,
-    int ProductId = 0
+    string? CatalogDeviceId = null
 );
 
 public static class BatterySlots

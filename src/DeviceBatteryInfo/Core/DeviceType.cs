@@ -6,5 +6,7 @@ public enum DeviceType
     System,
     AdbPhone,
     Bluetooth,
-    RazerDeathAdderV3Pro,
+
+    /// <summary>A model from a device family; the slot's <c>CatalogDeviceId</c> says which one.</summary>
+    Catalog,
 }

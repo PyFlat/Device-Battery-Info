@@ -1,19 +1,20 @@
 using DeviceBatteryInfo.Core;
+using DeviceBatteryInfo.Sources.Hid;
 using DeviceBatteryInfo.Sources.Razer;
-using DeviceBatteryInfo.Sources.Razer.DeathAdderV3Pro;
+using DeviceBatteryInfo.Sources;
 using NUnit.Framework;
 using Serilog;
 
 namespace DeviceBatteryInfo.Tests;
 
 [TestFixture]
-public sealed class DeathAdderV3ProProviderTests
+public sealed class HidFamilyTests
 {
-    private sealed class FakeTransport(params RazerHidCandidate[] candidates) : IRazerHidTransport
+    private sealed class FakeTransport(params HidCandidate[] candidates) : IHidTransport
     {
         public List<string> Queried { get; } = [];
 
-        public IReadOnlyList<RazerHidCandidate> FindCandidates(
+        public IReadOnlyList<HidCandidate> FindCandidates(
             int vendorId,
             int productId,
             int? interfaceNumber,
@@ -24,7 +25,7 @@ public sealed class DeathAdderV3ProProviderTests
                 .Where(c => c.FeatureReportLength >= minFeatureReportLength)
                 .ToArray();
 
-        public IReadOnlyList<RazerHidCandidate> ListFeatureReportDevices() => candidates;
+        public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => candidates;
 
         public Task<byte[]> ExchangeAsync(
             string devicePath,
@@ -42,7 +43,7 @@ public sealed class DeathAdderV3ProProviderTests
             }
 
             // A minimal completed frame carrying value 180 at the response-value index (see
-            // DeathAdderV3ProReportProtocol) - the exact command being asked does not matter here,
+            // RazerProtocol) - the exact command being asked does not matter here,
             // the protocol encoding itself is covered by BatterySourceParsingTests.
             var response = new byte[11];
             response[10] = 180;
@@ -52,7 +53,7 @@ public sealed class DeathAdderV3ProProviderTests
 
     // One HID collection. "unit" is the parent-instance token the provider groups on: the same value
     // for every collection of one physical mouse, a different value for a second identical mouse.
-    private static RazerHidCandidate Candidate(int iface, string unit = "0000") =>
+    private static HidCandidate Candidate(int iface, string unit = "0000") =>
         new(
             $@"\\?\hid#vid_1532&pid_00b7&mi_{iface:D2}#8&{unit}&0&0000#{{4d1e55b2-f16f-11cf-88cb-001111000030}}",
             0x1532,
@@ -67,31 +68,28 @@ public sealed class DeathAdderV3ProProviderTests
             id,
             name,
             BatterySourceKind.Mouse,
-            DeviceType.RazerDeathAdderV3Pro,
-            VendorId: 0x1532,
-            ProductId: 0x00B7
+            DeviceType.Catalog,
+            CatalogDeviceId: "razer-deathadder-v3-pro"
         );
 
-    private static DeviceCatalog CatalogWithMouse() => CatalogWith(MouseSlot("mouse", "Mouse"));
-
-    private static DeviceCatalog CatalogWith(params BatterySlot[] slots)
+    private static async Task<IReadOnlyList<IBatterySource>> DiscoverAsync(
+        FakeTransport transport,
+        params BatterySlot[] slots
+    )
     {
         var catalog = new DeviceCatalog();
         catalog.Set(slots);
-        return catalog;
+        var family = new HidFamily([new RazerProtocol()], transport, Serilog.Core.Logger.None);
+        return await new DeviceFamilyProvider([family], catalog).DiscoverAsync(
+            CancellationToken.None
+        );
     }
 
     [Test]
     public async Task Probes_past_the_boot_interface_to_the_one_that_answers()
     {
         var transport = new FakeTransport(Candidate(0), Candidate(2));
-        var provider = new DeathAdderV3ProBatterySourceProvider(
-            transport,
-            CatalogWithMouse(),
-            Serilog.Core.Logger.None
-        );
-
-        var sources = await provider.DiscoverAsync(CancellationToken.None);
+        var sources = await DiscoverAsync(transport, MouseSlot("mouse", "Mouse"));
 
         Assert.That(sources, Has.Count.EqualTo(1));
         var reading = await sources[0].ReadAsync(CancellationToken.None);
@@ -99,7 +97,7 @@ public sealed class DeathAdderV3ProProviderTests
         {
             Assert.That(
                 reading.Percent,
-                Is.EqualTo(DeathAdderV3ProReportProtocol.PercentFromRaw(180))
+                Is.EqualTo(RazerProtocol.PercentFromRaw(180))
             );
             Assert.That(transport.Queried, Does.Contain(Candidate(2).Path));
         }
@@ -108,13 +106,7 @@ public sealed class DeathAdderV3ProProviderTests
     [Test]
     public async Task No_matching_device_yields_no_source()
     {
-        var provider = new DeathAdderV3ProBatterySourceProvider(
-            new FakeTransport(),
-            CatalogWithMouse(),
-            Serilog.Core.Logger.None
-        );
-
-        Assert.That(await provider.DiscoverAsync(CancellationToken.None), Is.Empty);
+        Assert.That(await DiscoverAsync(new FakeTransport(), MouseSlot("mouse", "Mouse")), Is.Empty);
     }
 
     [Test]
@@ -126,13 +118,7 @@ public sealed class DeathAdderV3ProProviderTests
             Candidate(0, "bbbb"),
             Candidate(2, "bbbb")
         );
-        var provider = new DeathAdderV3ProBatterySourceProvider(
-            transport,
-            CatalogWith(MouseSlot("mouse-a", "Mouse A"), MouseSlot("mouse-b", "Mouse B")),
-            Serilog.Core.Logger.None
-        );
-
-        var sources = await provider.DiscoverAsync(CancellationToken.None);
+        var sources = await DiscoverAsync(transport, MouseSlot("mouse-a", "Mouse A"), MouseSlot("mouse-b", "Mouse B"));
         Assert.That(sources.Select(s => s.Id), Is.EquivalentTo(new[] { "mouse-a", "mouse-b" }));
 
         foreach (var source in sources)
@@ -149,13 +135,7 @@ public sealed class DeathAdderV3ProProviderTests
     public async Task Fewer_units_than_entries_leaves_the_extra_entry_without_a_source()
     {
         var transport = new FakeTransport(Candidate(0, "aaaa"), Candidate(2, "aaaa"));
-        var provider = new DeathAdderV3ProBatterySourceProvider(
-            transport,
-            CatalogWith(MouseSlot("mouse-a", "Mouse A"), MouseSlot("mouse-b", "Mouse B")),
-            Serilog.Core.Logger.None
-        );
-
-        var sources = await provider.DiscoverAsync(CancellationToken.None);
+        var sources = await DiscoverAsync(transport, MouseSlot("mouse-a", "Mouse A"), MouseSlot("mouse-b", "Mouse B"));
 
         Assert.That(sources.Select(s => s.Id), Is.EqualTo(["mouse-a"]));
     }
@@ -173,12 +153,12 @@ public sealed class DeathAdderV3ProHardwareTests
     {
         Assume.That(OperatingSystem.IsWindows());
 
-        var transport = new HidSharpRazerTransport(Serilog.Core.Logger.None);
+        var transport = new HidSharpTransport(Serilog.Core.Logger.None);
         var candidates = transport.FindCandidates(
             0x1532,
             0x00B7,
             interfaceNumber: null,
-            DeathAdderV3ProReportProtocol.ReportLength
+            new RazerProtocol().ReportLength
         );
         TestContext.Out.WriteLine($"candidates: {candidates.Count}");
         foreach (var candidate in candidates)
@@ -199,20 +179,18 @@ public sealed class DeathAdderV3ProHardwareTests
         {
             try
             {
-                var raw = await DeathAdderV3ProBatterySource.QueryAsync(
-                    transport,
-                    candidate.Path,
-                    DeathAdderV3ProReportProtocol.CommandBatteryLevel,
+                var raw = await RazerProtocol.QueryAsync(
+                    new HidChannel(transport, candidate.Path),
+                    RazerProtocol.CommandBatteryLevel,
                     CancellationToken.None
                 );
-                var charging = await DeathAdderV3ProBatterySource.QueryAsync(
-                    transport,
-                    candidate.Path,
-                    DeathAdderV3ProReportProtocol.CommandChargingStatus,
+                var charging = await RazerProtocol.QueryAsync(
+                    new HidChannel(transport, candidate.Path),
+                    RazerProtocol.CommandChargingStatus,
                     CancellationToken.None
                 );
                 TestContext.Out.WriteLine(
-                    $"  -> iface {candidate.InterfaceNumber} answered: raw {raw} = {DeathAdderV3ProReportProtocol.PercentFromRaw(raw)}% charging={DeathAdderV3ProReportProtocol.IsChargingFromRaw(charging)}"
+                    $"  -> iface {candidate.InterfaceNumber} answered: raw {raw} = {RazerProtocol.PercentFromRaw(raw)}% charging={charging == 1}"
                 );
                 level ??= raw;
             }
@@ -228,7 +206,7 @@ public sealed class DeathAdderV3ProHardwareTests
         {
             Assert.That(level, Is.Not.Null, "No candidate answered the feature report.");
             Assert.That(
-                DeathAdderV3ProReportProtocol.PercentFromRaw(level!.Value),
+                RazerProtocol.PercentFromRaw(level!.Value),
                 Is.InRange(1, 100)
             );
         }

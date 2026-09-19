@@ -18,14 +18,11 @@ internal static class DeviceConfigKeys
     public const string BluetoothNameCustom = "bluetoothNameCustom";
     public const string BluetoothKind = "bluetoothKind";
 
-    public const string VendorId = "vendorId";
-    public const string ProductId = "productId";
-
     public const string TypeSystem = "system";
     public const string TypeAdbPhone = "adb-phone";
     public const string TypeBluetooth = "bluetooth";
 
-    public const string TypeRazerDeathAdderV3Pro = "razer-deathadder-v3-pro";
+    public const string TypeCatalog = "catalog";
 
     public const string CategoryOther = "other";
 
@@ -34,7 +31,7 @@ internal static class DeviceConfigKeys
         {
             TypeSystem => DeviceType.System,
             TypeBluetooth => DeviceType.Bluetooth,
-            TypeRazerDeathAdderV3Pro => DeviceType.RazerDeathAdderV3Pro,
+            TypeCatalog => DeviceType.Catalog,
             _ => DeviceType.AdbPhone,
         };
 
@@ -44,19 +41,18 @@ internal static class DeviceConfigKeys
             CategoryOther => null,
             TypeSystem => DeviceType.System,
             TypeBluetooth => DeviceType.Bluetooth,
-            TypeRazerDeathAdderV3Pro => DeviceType.RazerDeathAdderV3Pro,
             _ => DeviceType.AdbPhone,
         };
 
     public static string TypeToCategory(DeviceType type) =>
-        DeviceModelCatalog.ForBackendType(type) is not null ? CategoryOther : TypeValue(type);
+        type == DeviceType.Catalog ? CategoryOther : TypeValue(type);
 
     public static string TypeValue(DeviceType type) =>
         type switch
         {
             DeviceType.System => TypeSystem,
             DeviceType.Bluetooth => TypeBluetooth,
-            DeviceType.RazerDeathAdderV3Pro => TypeRazerDeathAdderV3Pro,
+            DeviceType.Catalog => TypeCatalog,
             _ => TypeAdbPhone,
         };
 
@@ -87,27 +83,4 @@ internal static class DeviceConfigKeys
             BatterySourceKind.Pen => "pen",
             _ => "other",
         };
-
-    public static int? ParseUsbId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim();
-        if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-        {
-            return int.TryParse(
-                trimmed.AsSpan(2),
-                System.Globalization.NumberStyles.HexNumber,
-                null,
-                out var hex
-            )
-                ? hex
-                : null;
-        }
-
-        return int.TryParse(trimmed, out var dec) ? dec : null;
-    }
 }

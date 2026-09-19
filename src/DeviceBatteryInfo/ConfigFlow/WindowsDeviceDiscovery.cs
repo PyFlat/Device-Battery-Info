@@ -1,11 +1,11 @@
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources.Bluetooth;
-using DeviceBatteryInfo.Sources.Razer;
+using DeviceBatteryInfo.Sources.Hid;
 
 namespace DeviceBatteryInfo.ConfigFlow;
 
 internal sealed class WindowsDeviceDiscovery(
-    IRazerHidTransport hidTransport,
+    IHidTransport hidTransport,
     IPnpBatteryReader pnpReader
 ) : IDeviceDiscovery
 {

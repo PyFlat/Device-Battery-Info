@@ -30,7 +30,7 @@ public sealed class DeviceConfigFlowTests
     }
 
     private static DeviceConfigFlow Flow(IReadOnlyList<BatterySlot>? current = null) =>
-        new(new FakeDiscovery(), current ?? [], Serilog.Core.Logger.None);
+        new(new FakeDiscovery(), TestModels.Catalog(), current ?? [], Serilog.Core.Logger.None);
 
     /// <summary>Drives start -> basics -> (other) -> (details) on one flow instance, the way the host does.</summary>
     private static async Task<ConfigFlowResult> RunAsync(
@@ -174,7 +174,7 @@ public sealed class DeviceConfigFlowTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(result.Kind, Is.EqualTo(ConfigFlowResultKind.Complete));
-            Assert.That(result.Values!["type"].Value, Is.EqualTo("razer-deathadder-v3-pro"));
+            Assert.That(result.Values!["type"].Value, Is.EqualTo("catalog"));
             Assert.That(
                 result.Values!["catalogDevice"].Value,
                 Is.EqualTo("razer-deathadder-v3-pro")
@@ -263,9 +263,8 @@ public sealed class DeviceConfigFlowTests
                 "mouse",
                 "Mouse",
                 BatterySourceKind.Mouse,
-                DeviceType.RazerDeathAdderV3Pro,
-                VendorId: 0x1532,
-                ProductId: 0x00B7
+                DeviceType.Catalog,
+                CatalogDeviceId: "razer-deathadder-v3-pro"
             ),
         };
         var flow = Flow(devices);
@@ -339,7 +338,7 @@ public sealed class DeviceConfigFlowTests
                 result.Values!.Keys,
                 Is.EquivalentTo(new[] { "name", "type", "catalogDevice" })
             );
-            Assert.That(result.Values!["type"].Value, Is.EqualTo("razer-deathadder-v3-pro"));
+            Assert.That(result.Values!["type"].Value, Is.EqualTo("catalog"));
             Assert.That(
                 result.Values!["catalogDevice"].Value,
                 Is.EqualTo("razer-deathadder-v3-pro")
@@ -420,17 +419,6 @@ public sealed class DeviceConfigFlowTests
         {
             Assert.That(result.Kind, Is.EqualTo(ConfigFlowResultKind.Error));
             Assert.That(result.FieldErrors, Does.ContainKey("bluetoothName"));
-        }
-    }
-
-    [Test]
-    public void UsbId_parses_hex_and_decimal()
-    {
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(DeviceConfigKeys.ParseUsbId("0x1532"), Is.EqualTo(0x1532));
-            Assert.That(DeviceConfigKeys.ParseUsbId("5426"), Is.EqualTo(0x1532));
-            Assert.That(DeviceConfigKeys.ParseUsbId("nope"), Is.Null);
         }
     }
 }

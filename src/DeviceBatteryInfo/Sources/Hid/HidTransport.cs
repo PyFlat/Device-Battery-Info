@@ -2,9 +2,9 @@ using System.Text.RegularExpressions;
 using HidSharp;
 using Serilog;
 
-namespace DeviceBatteryInfo.Sources.Razer;
+namespace DeviceBatteryInfo.Sources.Hid;
 
-internal sealed record RazerHidCandidate(
+internal sealed record HidCandidate(
     string Path,
     int VendorId,
     int ProductId,
@@ -14,18 +14,18 @@ internal sealed record RazerHidCandidate(
     string? SerialNumber = null
 );
 
-// Generic HID plumbing only - no knowledge of any device's report format. A backend under
-// Sources/Razer/<Model>/ owns its own report layout and passes the finished request bytes in.
-internal interface IRazerHidTransport
+// Generic HID plumbing only - no knowledge of any device's report format. A device family
+// (Sources/Razer/, ...) owns its own report layout and passes the finished request bytes in.
+internal interface IHidTransport
 {
-    IReadOnlyList<RazerHidCandidate> FindCandidates(
+    IReadOnlyList<HidCandidate> FindCandidates(
         int vendorId,
         int productId,
         int? interfaceNumber,
         int minFeatureReportLength
     );
 
-    IReadOnlyList<RazerHidCandidate> ListFeatureReportDevices();
+    IReadOnlyList<HidCandidate> ListFeatureReportDevices();
 
     // Retries until isComplete accepts the response or attempts run out; throws otherwise
     Task<byte[]> ExchangeAsync(
@@ -36,7 +36,7 @@ internal interface IRazerHidTransport
     );
 }
 
-internal sealed partial class HidSharpRazerTransport(ILogger logger) : IRazerHidTransport
+internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
 {
     private static readonly TimeSpan SettleDelay = TimeSpan.FromMilliseconds(50);
 
@@ -46,12 +46,12 @@ internal sealed partial class HidSharpRazerTransport(ILogger logger) : IRazerHid
     private const int MaxQueryAttempts = 4;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(40);
 
-    private readonly ILogger _logger = logger.ForContext<HidSharpRazerTransport>();
+    private readonly ILogger _logger = logger.ForContext<HidSharpTransport>();
 
     [GeneratedRegex(@"mi_(?<n>[0-9a-fA-F]{1,2})", RegexOptions.IgnoreCase)]
     private static partial Regex InterfacePattern();
 
-    public IReadOnlyList<RazerHidCandidate> FindCandidates(
+    public IReadOnlyList<HidCandidate> FindCandidates(
         int vendorId,
         int productId,
         int? interfaceNumber,
@@ -68,7 +68,7 @@ internal sealed partial class HidSharpRazerTransport(ILogger logger) : IRazerHid
             .OrderBy(c => c.InterfaceNumber ?? int.MaxValue)
             .ToArray();
 
-    public IReadOnlyList<RazerHidCandidate> ListFeatureReportDevices() =>
+    public IReadOnlyList<HidCandidate> ListFeatureReportDevices() =>
         DeviceList
             .Local.GetHidDevices()
             .Select(Describe)
@@ -86,7 +86,7 @@ internal sealed partial class HidSharpRazerTransport(ILogger logger) : IRazerHid
     {
         if (!OperatingSystem.IsWindows())
         {
-            throw new PlatformNotSupportedException("Razer HID is Windows-only in v1.");
+            throw new PlatformNotSupportedException("HID feature reports are Windows-only in v1.");
         }
 
         var reportLength =
@@ -105,23 +105,23 @@ internal sealed partial class HidSharpRazerTransport(ILogger logger) : IRazerHid
         var buffer = new byte[reportLength];
         request.CopyTo(buffer, offset);
 
-        using var handle = NativeRazerHid.Open(devicePath);
+        using var handle = NativeHid.Open(devicePath);
 
         for (var attempt = 1; attempt <= MaxQueryAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            NativeRazerHid.SetFeature(handle, buffer);
+            NativeHid.SetFeature(handle, buffer);
             await Task.Delay(SettleDelay, cancellationToken);
 
             var response = new byte[reportLength];
-            NativeRazerHid.GetFeature(handle, response);
+            NativeHid.GetFeature(handle, response);
             if (isComplete(response))
             {
                 return response;
             }
 
             _logger.Debug(
-                "Razer feature-report exchange on {Path} not ready, attempt {Attempt}/{Max}: {Response}",
+                "HID feature-report exchange on {Path} not ready, attempt {Attempt}/{Max}: {Response}",
                 devicePath,
                 attempt,
                 MaxQueryAttempts,
@@ -131,11 +131,11 @@ internal sealed partial class HidSharpRazerTransport(ILogger logger) : IRazerHid
         }
 
         throw new InvalidOperationException(
-            $"Razer feature-report exchange on {devicePath} did not complete after {MaxQueryAttempts} attempts."
+            $"HID feature-report exchange on {devicePath} did not complete after {MaxQueryAttempts} attempts."
         );
     }
 
-    internal static RazerHidCandidate Describe(HidDevice device)
+    internal static HidCandidate Describe(HidDevice device)
     {
         int featureLength;
         try
@@ -152,7 +152,7 @@ internal sealed partial class HidSharpRazerTransport(ILogger logger) : IRazerHid
             ? int.Parse(match.Groups["n"].Value, System.Globalization.NumberStyles.HexNumber, null)
             : null;
 
-        return new RazerHidCandidate(
+        return new HidCandidate(
             device.DevicePath,
             device.VendorID,
             device.ProductID,

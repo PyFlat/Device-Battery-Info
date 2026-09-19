@@ -18,6 +18,7 @@ public sealed partial class BatteryIntegration(
     BatteryRegistry registry,
     BatteryTrendTracker trend,
     DeviceCatalog catalog,
+    DeviceModelCatalog models,
     IDeviceDiscovery discovery,
     ILogger logger
 ) : IPluginIntegration, IVariableProvider, IEventProvider, IConfigFlowProvider
@@ -32,6 +33,7 @@ public sealed partial class BatteryIntegration(
     private readonly BatteryRegistry _registry = registry;
     private readonly BatteryTrendTracker _trend = trend;
     private readonly DeviceCatalog _catalog = catalog;
+    private readonly DeviceModelCatalog _models = models;
     private readonly IDeviceDiscovery _discovery = discovery;
     private readonly ILogger _logger = logger.ForContext<BatteryIntegration>();
 
@@ -44,7 +46,7 @@ public sealed partial class BatteryIntegration(
     public bool AllowsMultipleConfigurations => true;
 
     public IConfigFlow CreateConfigFlow() =>
-        new DeviceConfigFlow(_discovery, _catalog.Devices, _logger);
+        new DeviceConfigFlow(_discovery, _models, _catalog.Devices, _logger);
 
     public async Task InitializeAsync(IIntegrationContext context)
     {
@@ -59,6 +61,7 @@ public sealed partial class BatteryIntegration(
         {
             var configured = await DeviceEntryReader.ReadAsync(
                 context.Config,
+                _models,
                 CancellationToken.None
             );
             _catalog.Set(configured);

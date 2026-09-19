@@ -1,48 +1,29 @@
 using DeviceBatteryInfo.Core;
+using DeviceBatteryInfo.Sources;
 using MacroDeck.Localization;
 
 namespace DeviceBatteryInfo.ConfigFlow;
 
-/// <summary>A specific, confirmed device model listed under "Other devices" in the config flow.</summary>
-internal sealed record CatalogDevice(
-    string Id,
-    string BrandId,
-    LocalizedText BrandLabel,
-    LocalizedText ModelLabel,
-    DeviceType BackendType,
-    int VendorId = 0,
-    int ProductId = 0
-);
-
-/// <summary>Add an entry here for each new device model (see <c>docs/adding-a-device.md</c>).</summary>
-internal static class DeviceModelCatalog
+/// <summary>Every model listed under "Other devices", collected from the registered device families.</summary>
+public sealed class DeviceModelCatalog(IEnumerable<IDeviceFamily> families)
 {
-    private static readonly IReadOnlyList<CatalogDevice> Entries =
+    private readonly IReadOnlyList<DeviceModel> _entries =
     [
-        new CatalogDevice(
-            "razer-deathadder-v3-pro",
-            "razer",
-            Strings.ConfigFlow.Device.Brand.Razer(),
-            Strings.ConfigFlow.Device.Model.RazerDeathAdderV3Pro(),
-            DeviceType.RazerDeathAdderV3Pro,
-            VendorId: 0x1532,
-            ProductId: 0x00B7
-        ),
+        .. families.SelectMany(f => f.Models),
     ];
 
-    public static bool NeedsDetailsStep(DeviceType backendType) =>
-        backendType is DeviceType.AdbPhone or DeviceType.Bluetooth;
+    public IReadOnlyList<(string Id, LocalizedText Label)> Brands =>
+        _entries
+            .GroupBy(e => e.BrandId)
+            .Select(g => (g.Key, (LocalizedText)g.First().Brand))
+            .ToArray();
 
-    public static IReadOnlyList<(string Id, LocalizedText Label)> Brands =>
-        Entries.GroupBy(e => e.BrandId).Select(g => (g.Key, g.First().BrandLabel)).ToArray();
+    public IReadOnlyList<DeviceModel> ModelsFor(string? brandId) =>
+        _entries.Where(e => e.BrandId == brandId).ToArray();
 
-    public static IReadOnlyList<CatalogDevice> ModelsFor(string? brandId) =>
-        Entries.Where(e => e.BrandId == brandId).ToArray();
+    public DeviceModel? ById(string? id) =>
+        id is { Length: > 0 } ? _entries.FirstOrDefault(e => e.Id == id) : null;
 
-    public static CatalogDevice? ById(string? id) =>
-        id is { Length: > 0 } ? Entries.FirstOrDefault(e => e.Id == id) : null;
-
-    // Assumes at most one entry per backend type.
-    public static CatalogDevice? ForBackendType(DeviceType type) =>
-        Entries.FirstOrDefault(e => e.BackendType == type);
+    public DeviceModel? For(BatterySlot slot) =>
+        slot.Type == DeviceType.Catalog ? ById(slot.CatalogDeviceId) : null;
 }
