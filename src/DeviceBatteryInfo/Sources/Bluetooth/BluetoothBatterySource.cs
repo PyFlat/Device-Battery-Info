@@ -18,8 +18,11 @@ internal sealed class BluetoothBatterySource(IPnpBatteryReader reader, BatterySl
     {
         var raw = await _reader.ReadRawAsync(_friendlyName, cancellationToken);
         var percent = BluetoothBatteryParser.ParsePercent(raw);
+
         return percent is null
-            ? BatteryReading.Unavailable
+            ? throw new InvalidOperationException(
+                $"Windows has no cached battery reading for '{_friendlyName}'."
+            )
             : new BatteryReading { Percent = percent, Status = BatteryStatus.Discharging };
     }
 }

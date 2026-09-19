@@ -54,8 +54,9 @@ internal sealed class PowerShellPnpBatteryReader : IPnpBatteryReader
                     ForEach-Object { $_.InstanceId }
             }
 
-            $candidateIds |
-                Sort-Object -Unique |
+            $bleIds = @($candidateIds | Where-Object { $_ -like 'BTHLE*' } | Sort-Object -Unique)
+            $otherIds = @($candidateIds | Where-Object { $_ -notlike 'BTHLE*' } | Sort-Object -Unique)
+            ($bleIds + $otherIds) |
                 ForEach-Object { (Get-PnpDeviceProperty -InstanceId $_ -KeyName $batteryPropertyKey -ErrorAction SilentlyContinue).Data } |
                 Where-Object { $_ -ne $null -and "$_" -ne '' } |
                 Select-Object -First 1
@@ -105,7 +106,11 @@ internal sealed class PowerShellPnpBatteryReader : IPnpBatteryReader
                 $address = $matches[1]
                 $siblings = @($bluetoothDevices | Where-Object { $_.InstanceId -like "*$address*" })
 
-                $supportsBattery = $siblings | Where-Object { $_.InstanceId -like '*0000111E*' }
+                $supportsBattery = $siblings | Where-Object {
+                    $_.InstanceId -like '*0000111E*' -or
+                    $_.InstanceId -like '*0000111F*' -or
+                    $_.InstanceId -like '*0000180F*'
+                }
                 if (-not $supportsBattery) {
                     continue
                 }
@@ -119,7 +124,8 @@ internal sealed class PowerShellPnpBatteryReader : IPnpBatteryReader
                 }
 
                 $alreadyHasValue = $batteryByName.Contains($root.FriendlyName) -and $null -ne $batteryByName[$root.FriendlyName]
-                if (-not $alreadyHasValue) {
+                $bleOverrides = $root.InstanceId -like 'BTHLE*' -and $null -ne $value
+                if (-not $alreadyHasValue -or $bleOverrides) {
                     $batteryByName[$root.FriendlyName] = $value
                 }
             }
