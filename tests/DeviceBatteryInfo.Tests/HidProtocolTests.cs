@@ -58,6 +58,7 @@ public sealed class HidProtocolTests
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
+            TimeSpan budget,
             CancellationToken cancellationToken
         ) => Task.FromResult(new byte[] { 0x00, request[1], 77 });
     }
@@ -137,6 +138,7 @@ public sealed class HidProtocolTests
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
+            TimeSpan budget,
             CancellationToken cancellationToken
         ) =>
             devicePath == "dongle" && !DongleReachesMouse

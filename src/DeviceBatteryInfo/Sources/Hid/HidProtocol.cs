@@ -21,9 +21,15 @@ internal sealed class HidChannel(
     IHidTransport transport,
     string devicePath,
     int productId,
-    HidReportKind kind = HidReportKind.Feature
+    HidReportKind kind = HidReportKind.Feature,
+    TimeSpan? budget = null
 )
 {
+    public static readonly TimeSpan ReadBudget = TimeSpan.FromMilliseconds(2000);
+
+    // Finding the right interface tries every candidate, so a silent one must not stall the poll for long.
+    public static readonly TimeSpan ProbeBudget = TimeSpan.FromMilliseconds(400);
+
     public int ProductId { get; } = productId;
 
     // Returns the first response isComplete accepts. Throws when none does, so the poll keeps
@@ -34,7 +40,13 @@ internal sealed class HidChannel(
         CancellationToken cancellationToken
     ) =>
         kind == HidReportKind.Feature
-            ? transport.ExchangeAsync(devicePath, request, isComplete, cancellationToken)
+            ? transport.ExchangeAsync(
+                devicePath,
+                request,
+                isComplete,
+                budget ?? ReadBudget,
+                cancellationToken
+            )
             : transport.ExchangeReportsAsync(devicePath, request, isComplete, cancellationToken);
 }
 

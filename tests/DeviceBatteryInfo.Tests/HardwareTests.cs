@@ -105,7 +105,14 @@ public sealed class HardwareTests
         try
         {
             var read = 0;
-            var (_, sources) = await DiscoverAsync([new RazerProtocol()]);
+            var retries = new RetryCounter();
+            var (_, sources) = await DiscoverAsync(
+                [new RazerProtocol()],
+                new Serilog.LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .WriteTo.Sink(retries)
+                    .CreateLogger()
+            );
             foreach (var source in sources)
             {
                 try
@@ -120,6 +127,8 @@ public sealed class HardwareTests
                 }
             }
 
+            // Zero retries means the poller never collided, so the run proved nothing about the timing.
+            HardwareReport.Line("retries", $"{retries.Count} not-ready responses retried past");
             Assert.That(read, Is.GreaterThan(0), "No Razer device answered while another poller ran.");
         }
         finally
@@ -169,16 +178,28 @@ public sealed class HardwareTests
         }
     }
 
+    private sealed class RetryCounter : Serilog.Core.ILogEventSink
+    {
+        private int _count;
+
+        public int Count => _count;
+
+        public void Emit(Serilog.Events.LogEvent logEvent)
+        {
+            if (logEvent.MessageTemplate.Text.Contains("not ready", StringComparison.Ordinal))
+            {
+                Interlocked.Increment(ref _count);
+            }
+        }
+    }
+
     private static async Task<(
         HidFamily Family,
         IReadOnlyList<IBatterySource> Sources
-    )> DiscoverAsync(HidProtocol[] protocols)
+    )> DiscoverAsync(HidProtocol[] protocols, Serilog.ILogger? logger = null)
     {
-        var family = new HidFamily(
-            protocols,
-            new HidSharpTransport(Serilog.Core.Logger.None),
-            Serilog.Core.Logger.None
-        );
+        logger ??= Serilog.Core.Logger.None;
+        var family = new HidFamily(protocols, new HidSharpTransport(logger), logger);
         var devices = new DeviceCatalog();
         devices.Set(
             [
