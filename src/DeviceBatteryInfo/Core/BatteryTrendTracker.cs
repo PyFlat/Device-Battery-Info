@@ -2,13 +2,8 @@ using System.Collections.Concurrent;
 
 namespace DeviceBatteryInfo.Core;
 
-/// <summary>
-/// Tracks how a device's charge level has moved recently, so a rate of change can be reported
-/// without pinning it to a fixed unit. History is appended only from <see cref="BatteryRegistry.Changed"/>,
-/// on the poll loop's thread; <see cref="GetTrend"/> is read concurrently from invocation scopes, so
-/// each recorded step replaces the segment with a new immutable instance rather than mutating one in
-/// place.
-/// </summary>
+// History is appended from Changed on the poll thread and read concurrently by GetTrend, so each
+// step replaces the segment with a new immutable instance instead of mutating one.
 public sealed class BatteryTrendTracker
 {
     // Bounds how far back a rate can look, so a segment cannot grow unbounded in memory
@@ -47,9 +42,8 @@ public sealed class BatteryTrendTracker
         );
     }
 
-    /// <summary>The change over whatever window of history is available for the device's current
-    /// charging segment, or null when there is not yet enough of it to say anything. A charge-state
-    /// flip (discharging to charging or back) starts a fresh segment, so the two rates never mix.</summary>
+    // Null until the current charging segment has enough history. A charge-state flip starts a new
+    // segment, so a discharge rate and a charge rate never mix.
     public BatteryTrend? GetTrend(BatterySnapshot snapshot)
     {
         if (

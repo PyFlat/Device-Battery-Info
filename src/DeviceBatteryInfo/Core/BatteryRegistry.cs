@@ -2,13 +2,13 @@ using System.Collections.Concurrent;
 
 namespace DeviceBatteryInfo.Core;
 
-// Reads never block on device I/O - the poll loop is the only writer
+// Reads never block on device I/O. The poll loop is the only writer.
 public sealed class BatteryRegistry(TimeProvider time)
 {
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private readonly TimeProvider _time = time;
 
-    /// <summary>Raised after any snapshot changes, on the poll loop's thread. Handlers must not block.</summary>
+    // Raised on the poll loop's thread after any snapshot changes. Handlers must not block.
     public event EventHandler<BatterySnapshotChangedEventArgs>? Changed;
 
     public IReadOnlyList<BatterySnapshot> Snapshots =>
@@ -70,7 +70,7 @@ public sealed class BatteryRegistry(TimeProvider time)
         );
     }
 
-    /// <summary>Drops sources that discovery no longer returns, so an unplugged device leaves the widget.</summary>
+    // Drops sources that discovery no longer returns, so an unplugged device leaves the widget.
     public void Retain(IReadOnlySet<string> liveIds)
     {
         foreach (var id in _entries.Keys.Where(id => !liveIds.Contains(id)).ToArray())

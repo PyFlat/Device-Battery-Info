@@ -1,11 +1,7 @@
 namespace DeviceBatteryInfo.Core;
 
-/// <summary>Turns a <see cref="BatteryTrend"/> into the two shapes callers need: a short display
-/// string, and a normalized rate for automations. Below a 1h window the display string shows the
-/// raw, non-extrapolated delta over whatever window is actually available (so "30m" and "45m" both
-/// occur depending on the device); from 1h onward the tracked window keeps growing (up to its
-/// bounded history), so the display string switches to the normalized percent-per-hour rate
-/// instead of stretching out to e.g. "-15%/3h".</summary>
+// Below a 1h window the text shows the raw delta over whatever window exists. From 1h on it shows
+// the normalized percent-per-hour rate instead of stretching to something like "-15%/3h".
 internal static class BatteryTrendFormatter
 {
     private static readonly TimeSpan NormalizeFrom = TimeSpan.FromHours(1);

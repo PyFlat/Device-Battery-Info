@@ -1,11 +1,11 @@
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources.Bluetooth;
-using DeviceBatteryInfo.Sources.Razer;
+using DeviceBatteryInfo.Sources.Hid;
 
 namespace DeviceBatteryInfo.ConfigFlow;
 
 internal sealed class WindowsDeviceDiscovery(
-    IRazerHidTransport hidTransport,
+    IHidTransport hidTransport,
     IPnpBatteryReader pnpReader
 ) : IDeviceDiscovery
 {
@@ -25,8 +25,8 @@ internal sealed class WindowsDeviceDiscovery(
     public Task<IReadOnlyList<DiscoveredHidDevice>> ListHidDevicesAsync(
         CancellationToken cancellationToken
     ) =>
-        // HidSharp opens every device to read its report descriptor, which can block - keep it off
-        // the caller's thread
+        // HidSharp opens every device to read its report descriptor, which can block.
+        // Keep it off the caller's thread.
         Task.Run<IReadOnlyList<DiscoveredHidDevice>>(
             () =>
                 hidTransport

@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace DeviceBatteryInfo.Sources.SystemBattery;
 
-/// <summary>Raw layout of the Win32 <c>SYSTEM_POWER_STATUS</c> structure</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct NativePowerStatus
 {

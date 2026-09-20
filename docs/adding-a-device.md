@@ -1,79 +1,114 @@
 # Adding a device
 
-Device Battery Info has three generic backends (This PC, an Android phone over adb, a Windows
-Bluetooth device) plus a growing **catalog** of specific products under "Other devices" - each catalog
-entry is confirmed against the exact hardware it names, never a whole brand or category (see
-`ConfigFlow/DeviceModelCatalog.cs` for what is in the catalog today). To support a device none of
-these cover, add a **battery source provider**.
+Everything under "Other devices" is a **model** that belongs to a **family** (a way of talking to a
+device). Pick the case that fits. None of them touch the config flow, the enums or the translations.
 
-## The contract
+| You want to add | You write |
+| --- | --- |
+| Another Razer mouse | one line |
+| A brand that talks USB HID feature reports (Logitech, SteelSeries, ...) | one file, one class |
+| Anything else (Bluetooth LE, a vendor API, ...) | one file, one class |
 
-Two small interfaces in `src/DeviceBatteryInfo/Core/`:
+Only add a device after you have read its battery on the real hardware.
+
+## Another mouse from a known brand
+
+Add one line to `Devices` in `Sources/Razer/RazerProtocol.cs`: the name and **every** USB product id the
+mouse shows up as.
 
 ```csharp
-public interface IBatterySource
-{
-    string Id { get; }            // stable, lowercase kebab-case, unique. It is the variable prefix:
-                                  // battery_<Id>_percent and so on. Treat it as a public API.
-    string DisplayName { get; }
-    BatterySourceKind Kind { get; }
-    ValueTask<BatteryReading> ReadAsync(CancellationToken cancellationToken);
-}
+new("Some Wireless Mouse", 0x00AB, 0x00AA),   // dongle, cable
+```
 
-public interface IBatterySourceProvider
+A wireless mouse has one product id for its dongle and another when it is plugged in with the cable
+(Device Manager, hardware ids: `VID_1532&PID_00AB`). Leave the cable one out and the mouse disappears as
+soon as it is wired. Run the hardware tests once in each mode to find them and to check that both answer:
+
+```
+dotnet test --filter Category=Hardware
+```
+
+If the new mouse needs a different request, branch on `channel.ProductId` inside `ReadAsync`.
+
+## A new HID brand
+
+Create `Sources/<Brand>/<Brand>Protocol.cs`. The class is found automatically. You describe the brand
+and turn one exchange into a reading. The plugin handles finding the device, picking the right HID
+interface and telling two identical units apart.
+
+```csharp
+internal sealed class LogitechProtocol() : HidProtocol("Logitech", vendorId: 0x046D, reportLength: 20)
 {
-    // Called every poll cycle. Cheap. Returns an empty list for the normal "nothing connected" case,
-    // never throws for it.
-    ValueTask<IReadOnlyList<IBatterySource>> DiscoverAsync(CancellationToken cancellationToken);
+    public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
+    [
+        new("G Pro X Superlight 2", 0xC09B),
+    ];
+
+    public override async Task<BatteryReading> ReadAsync(
+        HidChannel channel, HidDeviceInfo device, CancellationToken cancellationToken)
+    {
+        var response = await channel.ExchangeAsync(
+            request: BuildBatteryRequest(),
+            isComplete: r => r.Length > 4 && r[1] == 0x10,
+            cancellationToken);
+
+        return BatteryReading.FromPercent(response[4]);
+    }
 }
 ```
 
-`BatteryReading` carries `Percent` (`int?`, null when unknown), `Status`
-(`Unknown`/`Discharging`/`Charging`/`Full`), and optional `TimeToFull` / `TimeToEmpty`. Return
-`BatteryReading.Unavailable` when the device is reachable but has no number to give; **throw** when
-the read itself failed (the poll loop turns repeated throws into a stale, dimmed reading rather than
-a wrong one).
+`Sources/Logitech/LogitechProtocol.cs` is the real, hardware-verified version of this (HID++ 2.0). It
+sits on `LogitechHidppProtocol`, which holds the framing every Logitech device shares, so a second
+Logitech device is a feature id, a function and a parser. What each part means:
 
-## Steps
+- `vendorId` is the brand's USB vendor id. `reportLength` is the smallest report the right interface
+  supports.
+- Most brands (Razer) exchange **feature reports**, which is the default. Some (Logitech HID++) write an
+  output report and read input reports on a vendor interface instead. For those pass
+  `HidReportKind.InputOutput` and the interface's `usagePage`/`usage` to the base constructor, as
+  `LogitechProtocol` does. The interface listing below shows which one your device has. That device may
+  also send unrelated reports, so `isComplete` must match the answer to your request.
+- `ExchangeAsync` sends your bytes and returns the first response `isComplete` accepts. If none does it
+  throws, which is what you want: the plugin keeps the last good value instead of showing garbage.
+  Devices sometimes answer with an empty placeholder frame first, so check that the frame really is the
+  answer to your request (Razer checks a status byte and the echoed command).
+- `ReadAsync` must throw when the device does not answer. The plugin uses the same call to find out
+  which HID interface is the right one.
+- For charging, return `new BatteryReading { Percent = .., Status = BatteryStatus.Charging }`.
 
-1. Add a folder under `src/DeviceBatteryInfo/Sources/<YourDevice>/`. If the device shares
-   infrastructure with an existing backend (another Razer HID device, say), reuse that backend's
-   shared utilities instead of copying them - `Sources/Razer/` holds the generic HID transport and
-   interop, and `Sources/Razer/DeathAdderV3Pro/` holds only what is specific to that one confirmed
-   model; a second Razer device gets its own `Sources/Razer/<Model>/` folder next to it, not a fork
-   of the transport.
-2. Put the wire/parse logic in a **pure static** class (no I/O) so it is unit-testable, and the
-   actual I/O behind a small interface with a real implementation, mirroring `Sources/Adb/`
-   (`AdbBatteryParser` + `IAdbCommandRunner`).
-3. Implement `IBatterySource` and an `IBatterySourceProvider` that discovers it. Gate discovery on
-   `OperatingSystem.IsWindows()`, and have it read the configured device set from `DeviceCatalog`
-   (see the DeathAdder V3 Pro provider for the pattern) rather than adding an options flag - there is
-   no default/seeded device, and no `appsettings.json`: a fresh install shows nothing until the user
-   adds a device through the config flow.
-4. If the device needs configuration (an address, an id, a name), add config-flow fields for it (see
-   step 6) - device configuration lives entirely in the config-flow entries read by
-   `DeviceEntryReader`, not in `BatteryPluginOptions` (that type only holds plugin-wide settings like
-   the poll interval).
-5. Register the provider in `Sources/BatterySourceRegistration.cs`:
-   `services.AddSingleton<IBatterySourceProvider, YourProvider>();`
-6. Make the device selectable in the config flow. It belongs under **Other devices** (not a
-   top-level category), so add an entry to `ConfigFlow/DeviceModelCatalog.cs` with its brand,
-   model, the backend `DeviceType` it maps to and, for a USB device, its `VendorId` / `ProductId`
-   (the flow reads them from here, so the user is never asked). Reuse an existing `DeviceType` when
-   the details it needs already exist; if the entry fully describes its backend it completes straight
-   from the model step (see `DeviceModelCatalog.NeedsDetailsStep`). A genuinely new backend that
-   still needs user input also needs a new `DeviceType` value plus matching cases in
-   `DeviceConfigFlow.BuildDetailsStepAsync` / `ValidateDetails` / `Complete`, a `NeedsDetailsStep`
-   entry, and a branch in `DeviceEntryReader`.
+To see what your device exposes, run `HardwareTests` (`dotnet test --filter Category=Hardware` from
+`tests/DeviceBatteryInfo.Tests`). It lists every HID interface of the supported brands with its report
+sizes and usage page, then reads each supported device the way the plugin does. Add your brand's protocol
+to its `Protocols` list.
 
-   There is deliberately no "enter your own USB ids" path in the UI: a raw vendor/product id is not
-   enough to talk to a device (the DeathAdder V3 Pro, for instance, needs its whole HID feature-report
-   protocol), so an unlisted device is a catalog entry plus the source above, not a config option.
-7. Add tests next to the others (`tests/DeviceBatteryInfo.Tests/BatterySourceParsingTests.cs`
-   and `DeviceConfigFlowTests.cs` are the patterns), then `dotnet build && dotnet test`.
+`Sources/Razer/RazerProtocol.cs` is a complete real example. Keep the byte layout in small `static`
+methods (`BuildRequest`, `IsCompletedResponse`) so a test can check them without a device.
 
-Nothing else changes: the poll loop discovers your provider automatically, the registry stores its
-readings, and the variable catalogue creates `battery_<Id>_*` from any source it sees, because
-`BatterySlots.Reserve`/`Slug` (used by `DeviceEntryReader`) is the one place a device id is derived
-from its name. (A JSON descriptor format for simple HID devices, so this needs no C#, is a planned
-follow-up.)
+## Something that is not USB HID
+
+Derive from `SimpleDeviceFamily` (`Sources/DeviceFamily.cs`), list the models, implement `ReadAsync`:
+
+```csharp
+internal sealed class AcmeFamily : SimpleDeviceFamily
+{
+    public override IReadOnlyList<DeviceModel> Models { get; } =
+    [
+        new("Acme", "Wireless Mouse 3", BatterySourceKind.Mouse),
+    ];
+
+    protected override ValueTask<BatteryReading> ReadAsync(
+        DeviceModel model, BatterySlot slot, CancellationToken cancellationToken) { ... }
+}
+```
+
+Throw from `ReadAsync` when the read failed (the value is kept and shown as stale). Override
+`IsPresentAsync` if the device can be unplugged: an absent device is hidden until it returns.
+Constructor dependencies such as `ILogger` are injected.
+
+Not supported yet: a device that needs input from the user beyond picking its model (an address, a
+pairing name). Those are the three generic backends in the config flow.
+
+## Tests
+
+`HidProtocolTests.cs` is the shortest possible protocol test, `HidFamilyTests.cs` shows a fake transport,
+and `BatterySourceParsingTests.cs` tests the Razer byte layout. Then run `dotnet build && dotnet test`.

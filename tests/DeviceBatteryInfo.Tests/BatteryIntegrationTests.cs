@@ -8,8 +8,6 @@ using NUnit.Framework;
 
 namespace DeviceBatteryInfo.Tests;
 
-/// <summary>End-to-end wiring through <see cref="PluginTestHarness"/>: the plugin builds, initializes
-/// and serves its catalogue without a socket.</summary>
 [TestFixture]
 public sealed class BatteryIntegrationTests
 {
@@ -85,14 +83,12 @@ public sealed class BatteryIntegrationTests
         var describeJson = describe.Data?.ToString() ?? string.Empty;
         Assert.That(describeJson, Does.Not.Contain("battery_system_percent"));
 
-        // ...but discover pages the whole set.
         var discover = await harness.Variables.DiscoverAsync(pageSize: 200);
         Assert.That(discover.Succeeded, Is.True, discover.Error?.ToString() ?? "none");
         var discoverJson = discover.Data?.ToString() ?? string.Empty;
         Assert.That(discoverJson, Does.Contain("system-percent"));
         Assert.That(discoverJson, Does.Contain("headset-charging"));
 
-        // ...and each id resolves.
         var resolve = await harness.Variables.ResolveAsync("system-percent");
         Assert.That(resolve.Succeeded, Is.True, resolve.Error?.ToString() ?? "none");
     }
@@ -179,7 +175,6 @@ public sealed class BatteryIntegrationTests
     }
 }
 
-/// <summary>Guards the localization wiring rather than any wording.</summary>
 [TestFixture]
 public sealed class LocalizationTests
 {

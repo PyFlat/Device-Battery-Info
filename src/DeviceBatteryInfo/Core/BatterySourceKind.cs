@@ -1,6 +1,6 @@
 namespace DeviceBatteryInfo.Core;
 
-/// <summary>Broad device category, used only to pick a default icon and to group the widget list.</summary>
+// Only used to pick a default icon and to group the widget list.
 public enum BatterySourceKind
 {
     Other,

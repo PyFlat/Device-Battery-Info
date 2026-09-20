@@ -1,7 +1,8 @@
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources.Adb;
 using DeviceBatteryInfo.Sources.Bluetooth;
-using DeviceBatteryInfo.Sources.Razer.DeathAdderV3Pro;
+using DeviceBatteryInfo.Sources.Razer;
+using DeviceBatteryInfo.Sources;
 using DeviceBatteryInfo.Sources.SystemBattery;
 using NUnit.Framework;
 
@@ -50,14 +51,12 @@ public sealed class AdbBatteryParserTests
 }
 
 [TestFixture]
-public sealed class DeathAdderV3ProReportProtocolTests
+public sealed class RazerProtocolTests
 {
     [Test]
     public void Request_has_command_and_checksum()
     {
-        var request = DeathAdderV3ProReportProtocol.BuildRequest(
-            DeathAdderV3ProReportProtocol.CommandBatteryLevel
-        );
+        var request = RazerProtocol.BuildRequest(RazerProtocol.CommandBatteryLevel);
 
         Assert.That(request, Has.Length.EqualTo(90));
         using (Assert.EnterMultipleScope())
@@ -76,30 +75,10 @@ public sealed class DeathAdderV3ProReportProtocolTests
     {
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(DeathAdderV3ProReportProtocol.PercentFromRaw(255), Is.EqualTo(100));
-            Assert.That(DeathAdderV3ProReportProtocol.PercentFromRaw(0), Is.EqualTo(0));
-            Assert.That(DeathAdderV3ProReportProtocol.PercentFromRaw(128), Is.EqualTo(50));
+            Assert.That(RazerProtocol.PercentFromRaw(255), Is.EqualTo(100));
+            Assert.That(RazerProtocol.PercentFromRaw(0), Is.EqualTo(0));
+            Assert.That(RazerProtocol.PercentFromRaw(128), Is.EqualTo(50));
         }
-    }
-
-    [Test]
-    public void Charging_is_raw_one()
-    {
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(DeathAdderV3ProReportProtocol.IsChargingFromRaw(1), Is.True);
-            Assert.That(DeathAdderV3ProReportProtocol.IsChargingFromRaw(0), Is.False);
-        }
-    }
-
-    [Test]
-    public void Response_value_is_read_from_index_ten_of_the_raw_buffer()
-    {
-        var report = new byte[91];
-        report[10] = 200; // Razer argument 1 - the value we want
-        report[11] = 1; // Razer argument 2 - the off-by-one byte
-
-        Assert.That(DeathAdderV3ProReportProtocol.ReadResponseValue(report), Is.EqualTo(200));
     }
 
     private static byte[] CompletedFrame(byte commandId, byte value)
@@ -116,9 +95,9 @@ public sealed class DeathAdderV3ProReportProtocolTests
     public void Completed_response_needs_success_status_and_the_matching_command_echo()
     {
         Assert.That(
-            DeathAdderV3ProReportProtocol.IsCompletedResponse(
-                CompletedFrame(DeathAdderV3ProReportProtocol.CommandBatteryLevel, 128),
-                DeathAdderV3ProReportProtocol.CommandBatteryLevel
+            RazerProtocol.IsCompletedResponse(
+                CompletedFrame(RazerProtocol.CommandBatteryLevel, 128),
+                RazerProtocol.CommandBatteryLevel
             ),
             Is.True
         );
@@ -128,9 +107,9 @@ public sealed class DeathAdderV3ProReportProtocolTests
     public void A_not_ready_placeholder_frame_is_not_a_completed_response()
     {
         Assert.That(
-            DeathAdderV3ProReportProtocol.IsCompletedResponse(
+            RazerProtocol.IsCompletedResponse(
                 new byte[91],
-                DeathAdderV3ProReportProtocol.CommandBatteryLevel
+                RazerProtocol.CommandBatteryLevel
             ),
             Is.False
         );
@@ -139,12 +118,12 @@ public sealed class DeathAdderV3ProReportProtocolTests
     [Test]
     public void A_frame_answering_a_different_command_is_not_accepted()
     {
-        var chargingFrame = CompletedFrame(DeathAdderV3ProReportProtocol.CommandChargingStatus, 1);
+        var chargingFrame = CompletedFrame(RazerProtocol.CommandChargingStatus, 1);
 
         Assert.That(
-            DeathAdderV3ProReportProtocol.IsCompletedResponse(
+            RazerProtocol.IsCompletedResponse(
                 chargingFrame,
-                DeathAdderV3ProReportProtocol.CommandBatteryLevel
+                RazerProtocol.CommandBatteryLevel
             ),
             Is.False
         );

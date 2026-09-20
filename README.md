@@ -14,7 +14,7 @@ The first three rows are generic backends - they work with whatever hardware of 
 **Other devices** is different: it is a catalog of specific products someone has implemented and
 tested against real hardware, one at a time, and it only ever lists exactly what is confirmed to work
 today - never a whole brand or category. See what's currently in it from inside Macro Deck (the config
-flow's "Other devices" step lists every entry) or in `DeviceModelCatalog.cs`; this README intentionally
+flow's "Other devices" step lists every entry) or in the `Models` list of each family under `Sources/`; this README intentionally
 doesn't duplicate that list; it would go stale. **Adding a device you own is the main way this catalog
 grows**, see [Contributing a device](#contributing-a-device) below.
 
@@ -65,9 +65,9 @@ once published) and install it from Macro Deck's plugin manager. Windows only fo
 
 ## Contributing a device
 
-This plugin is built so that supporting a new device is a self-contained, testable change, not a
-rewrite of the plugin. [`docs/adding-a-device.md`](docs/adding-a-device.md) walks through the
-interfaces involved and where a new backend plugs in. Please read
+This plugin is built so that supporting a new device is a one-line or one-file change. A new model in
+an existing family (say another Razer mouse) is one line in that family's `Models` list; a new protocol
+is one class. [`docs/adding-a-device.md`](docs/adding-a-device.md) shows both. Please read
 [CONTRIBUTING.md](CONTRIBUTING.md) first, in particular the note on AI-assisted contributions - AI
 tools are welcome, but a device backend that was not actually exercised against the real hardware, or
 a PR its author cannot explain, will not be merged.
@@ -103,8 +103,8 @@ src/DeviceBatteryInfo/
                             BatteryPluginOptions, DeviceCatalog
   Sources/                  one folder per backend (SystemBattery, Razer, Adb, Bluetooth): a pure
                             parser, an IO wrapper behind an interface, and an IBatterySource(+Provider).
-                            Razer/ is shared HID utilities plus one subfolder per confirmed device
-                            model (DeathAdderV3Pro/) - see "Contributing a device" above
+                            Hid/ is the shared HID transport, base class and family, Razer/ is one protocol file whose device list is one
+                            line per supported mouse - see "Contributing a device" above
   Variables/                slot x field -> VariableDefinition, and the reverse resolve
   Ui/                       widget rendering, config view and preview scenarios
   Actions/                  the "Refresh battery levels" action

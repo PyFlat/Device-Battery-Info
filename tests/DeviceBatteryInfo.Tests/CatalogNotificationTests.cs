@@ -71,6 +71,7 @@ public sealed class CatalogNotificationTests
             registry,
             new BatteryTrendTracker(registry),
             catalog,
+            TestModels.Catalog(),
             new NoDiscovery(),
             Serilog.Core.Logger.None
         );

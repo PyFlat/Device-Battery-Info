@@ -8,6 +8,7 @@ namespace DeviceBatteryInfo.ConfigFlow;
 
 internal sealed class DeviceConfigFlow(
     IDeviceDiscovery discovery,
+    DeviceModelCatalog models,
     IReadOnlyList<BatterySlot> currentDevices,
     ILogger logger
 ) : IConfigFlow
@@ -104,7 +105,7 @@ internal sealed class DeviceConfigFlow(
             case StepOther:
             {
                 var brand = Draft(DeviceConfigKeys.CatalogBrand);
-                var entry = DeviceModelCatalog.ById(
+                var entry = models.ById(
                     brand is null ? null : Draft(CatalogDeviceKey(brand))
                 );
 
@@ -123,16 +124,7 @@ internal sealed class DeviceConfigFlow(
 
                 _draft[DeviceConfigKeys.CatalogDevice] = entry.Id;
 
-                return DeviceModelCatalog.NeedsDetailsStep(entry.BackendType)
-                    ? ConfigFlowResult.Step(
-                        await BuildDetailsStepAsync(
-                            name,
-                            entry.BackendType,
-                            editing,
-                            cancellationToken
-                        )
-                    )
-                    : Complete(name, entry.BackendType);
+                return Complete(name, DeviceType.Catalog);
             }
 
             case StepDetails:
@@ -188,16 +180,14 @@ internal sealed class DeviceConfigFlow(
             [DeviceConfigKeys.Type] = ConfigFlowValue.Plain(DeviceConfigKeys.TypeValue(type)),
         };
 
-        if (
-            Draft(DeviceConfigKeys.Category) == DeviceConfigKeys.CategoryOther
-            && Draft(DeviceConfigKeys.CatalogDevice) is { Length: > 0 } catalogDevice
-        )
-        {
-            values[DeviceConfigKeys.CatalogDevice] = ConfigFlowValue.Plain(catalogDevice);
-        }
-
         switch (type)
         {
+            case DeviceType.Catalog:
+                values[DeviceConfigKeys.CatalogDevice] = ConfigFlowValue.Plain(
+                    Draft(DeviceConfigKeys.CatalogDevice)
+                );
+                break;
+
             case DeviceType.AdbPhone:
                 values[DeviceConfigKeys.AdbAddress] = ConfigFlowValue.Plain(
                     Draft(DeviceConfigKeys.AdbAddress)
@@ -285,8 +275,8 @@ internal sealed class DeviceConfigFlow(
 
     private ConfigFlowStep BuildOtherStep(BatterySlot? editing)
     {
-        var editingEntry = editing is null ? null : DeviceModelCatalog.ForBackendType(editing.Type);
-        var brands = DeviceModelCatalog.Brands;
+        var editingEntry = editing is null ? null : models.For(editing);
+        var brands = models.Brands;
         var selectedBrand =
             Draft(DeviceConfigKeys.CatalogBrand) ?? editingEntry?.BrandId ?? brands[0].Id;
 
@@ -305,21 +295,21 @@ internal sealed class DeviceConfigFlow(
 
         foreach (var (brandId, _) in brands)
         {
-            var models = DeviceModelCatalog.ModelsFor(brandId);
+            var brandModels = models.ModelsFor(brandId);
             var defaultModel =
                 Draft(CatalogDeviceKey(brandId))
                 ?? (editingEntry?.BrandId == brandId ? editingEntry.Id : null)
-                ?? models[0].Id;
+                ?? brandModels[0].Id;
 
             fields.Add(
                 ActionParameter
                     .Choice(
                         CatalogDeviceKey(brandId),
-                        models
+                        brandModels
                             .Select(m => new ActionParameterOption
                             {
                                 Value = m.Id,
-                                Label = m.ModelLabel,
+                                Label = m.Name,
                             })
                             .ToArray(),
                         label: Strings.ConfigFlow.Device.Other.Model.Label(),
@@ -476,7 +466,7 @@ internal sealed class DeviceConfigFlow(
             _draft[DeviceConfigKeys.BluetoothKind] = DeviceConfigKeys.KindValue(slot.Kind);
         }
 
-        if (DeviceModelCatalog.ForBackendType(slot.Type) is { } catalogEntry)
+        if (models.For(slot) is { } catalogEntry)
         {
             _draft[DeviceConfigKeys.CatalogBrand] = catalogEntry.BrandId;
             _draft[CatalogDeviceKey(catalogEntry.BrandId)] = catalogEntry.Id;
@@ -516,8 +506,7 @@ internal sealed class DeviceConfigFlow(
 
     private DeviceType ResolveType() =>
         Draft(DeviceConfigKeys.Category) == DeviceConfigKeys.CategoryOther
-            ? DeviceModelCatalog.ById(Draft(DeviceConfigKeys.CatalogDevice))?.BackendType
-                ?? DeviceType.RazerDeathAdderV3Pro
+            ? DeviceType.Catalog
             : DeviceConfigKeys.CategoryToType(Draft(DeviceConfigKeys.Category))
                 ?? DeviceType.AdbPhone;
 

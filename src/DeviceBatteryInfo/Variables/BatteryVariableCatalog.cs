@@ -3,7 +3,7 @@ using MacroDeck.Sdk.Variables;
 
 namespace DeviceBatteryInfo.Variables;
 
-/// <summary>Field suffixes are a public API, baked into every binding a user makes - don't rename them.</summary>
+// Field suffixes are a public API baked into every binding a user makes. Do not rename them.
 internal static class BatteryVariableCatalog
 {
     public enum Field

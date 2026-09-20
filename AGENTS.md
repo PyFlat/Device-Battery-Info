@@ -6,7 +6,7 @@ work in this repository, update this file as part of that change rather than lea
 This folder is **Device Battery Info** (`manifest.json` `name`), a Macro Deck 3 out-of-process plugin,
 scaffolded from `macrodeck-plugin new`. It reads battery state from three generic backends (the host
 PC, an Android phone over adb, Windows Bluetooth audio devices) plus a growing catalog of specific
-products under "Other devices" (see `ConfigFlow/DeviceModelCatalog.cs` for the current list), and exposes each as a set of Macro Deck
+products under "Other devices" (each model lives in a device family, see `Sources/DeviceFamily.cs`), and exposes each as a set of Macro Deck
 variables plus charging/low events, alongside a custom deck widget (a multi-device panel and a
 single-device tile).
 
@@ -28,10 +28,10 @@ src/DeviceBatteryInfo/
   ConfigFlow/              DeviceConfigFlow (host-rendered steps per device: basics picks a name and
                            a category, "Other devices" adds a brand/model step; a backend that still
                            needs an address or a device name (adb, Bluetooth) then gets a details
-                           step, one that a catalog entry fully describes (the DeathAdder V3 Pro) completes
-                           straight from the model step; async, enumerates Bluetooth + pre-fills on
-                           edit), DeviceModelCatalog (brand -> model -> backend DeviceType + USB id
-                           for the "Other devices" step), DeviceEntryReader (entries -> BatterySlot[]),
+                           step, a catalog model completes straight from the model step; async, enumerates
+                           Bluetooth + pre-fills on edit), DeviceModelCatalog (brand -> model, collected
+                           from the registered device families, for the "Other devices" step),
+                           DeviceEntryReader (entries -> BatterySlot[]),
                            DeviceConfigKeys, WindowsDeviceDiscovery
   Core/DeviceCatalog.cs    the live device set: seeded from BatteryPluginOptions, replaced from config
                            entries
@@ -50,9 +50,12 @@ src/DeviceBatteryInfo/
                            BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate)
   Sources/                 one folder per backend (SystemBattery, Razer, Adb, Bluetooth), each a
                            pure parser + an IO wrapper behind an interface + IBatterySource(+Provider);
-                           BatterySourceRegistration wires them into DI. Razer/ is split further: shared
-                           HID transport/interop directly under it, one subfolder per confirmed device
-                           model (currently DeathAdderV3Pro/) for the model-specific report protocol
+                           BatterySourceRegistration wires them into DI. DeviceFamily.cs holds the
+                           device-family contracts (IDeviceFamily, DeviceModel, SimpleDeviceFamily,
+                           DeviceFamilyProvider); every family in the assembly is registered by
+                           scanning. Hid/ has the shared HID transport/interop, HidProtocol
+                           (what a brand implements) and HidFamily; Razer/RazerProtocol.cs lists the
+                           supported mice
   Variables/BatteryVariableCatalog.cs   slot x field -> VariableDefinition, and the reverse resolve
   Localization/Strings.resx   default-culture strings; Strings.<culture>.resx per language
   Assets/icon.svg
@@ -61,6 +64,10 @@ tests/DeviceBatteryInfo.Tests/
   BatteryIntegrationTests.cs      builds, initializes, the variables catalogue + a read work
   BatterySourceParsingTests.cs    dumpsys / Razer report / PnP / Win32 power-status parsers
   BatteryRegistryTests.cs         registry update / stale / retain, and catalog id round-trips
+  HardwareTests.cs                [Explicit, Category=Hardware]: lists Bluetooth and HID interfaces, reads
+                                  every supported HID device through the plugin, and reads one again while a
+                                  foreign poller hammers the same control interface (the Synapse case); all
+                                  output goes through HardwareReport so every line has the same shape
 ```
 
 Design knowledge that is not obvious from the code alone:
@@ -161,44 +168,89 @@ Design knowledge that is not obvious from the code alone:
   hashtables), only `{{...}}` interpolates a C# value, which is what makes it readable as actual
   multi-line PowerShell with real variable names instead of an escaped, concatenated one-liner. Keep
   writing new embedded PowerShell here the same way.
-- **Razer is split into shared utilities and one device-specific backend.**
-  `Sources/Razer/` holds only what any Razer HID device would need - `NativeRazerHid` (the raw
-  `hid.dll` feature-report interop), and `IRazerHidTransport`/`HidSharpRazerTransport` (enumeration
-  plus a protocol-agnostic `ExchangeAsync`: it sends the request bytes it is given and retries until
-  the caller's `isComplete` predicate accepts the response, with no idea what a "battery" command
-  looks like). `Sources/Razer/DeathAdderV3Pro/` is the only confirmed device: `DeathAdderV3ProReportProtocol`
-  (the report layout, command ids, checksum) and `DeathAdderV3ProBatterySource` +
-  `DeathAdderV3ProBatterySourceProvider`. **Only this exact model has been tested.** The command
-  class (0x07, "power") and command ids it uses are part of Razer's shared HID protocol and plausibly
-  work on other Razer mice, but treat that as unverified until someone adds a `RazerHidCandidate`
-  probe against real hardware. A second Razer device gets its own `Sources/Razer/<Model>/` folder
-  reusing the same transport, not a fork of it - see `docs/adding-a-device.md`.
+- **A device is a model in a device family, and a family is one file.** `IDeviceFamily` (in
+  `Sources/DeviceFamily.cs`) is a protocol plus its `DeviceModel`s. A new model in an existing family is
+  one line in that family's `Devices`/`Models`; a new protocol is one class: a `HidProtocol` for a USB
+  HID brand, a `SimpleDeviceFamily` (list the models, implement `ReadAsync`) for anything else, or a
+  raw `IDeviceFamily` when it must locate hardware itself. Keep these contracts non-generic and free of
+  constructor plumbing: a contributor should not need to understand the framework to add a protocol.
+  Families and protocols are registered by assembly scan, `DeviceModelCatalog` is built from them, and `DeviceFamilyProvider` hands each family the
+  configured slots (`DeviceType.Catalog`, `CatalogDeviceId`) whose model it owns. A model id is
+  `slug(brand + name)`, persisted in user data, so never rename a shipped model. A config entry stores
+  `type=catalog` plus `catalogDevice=<model id>`; the reader still accepts the older
+  `type=razer-deathadder-v3-pro` (model id as the type) and ignores the retired `vendorId`/`productId`
+  keys. Brand and model names are proper nouns and are the one deliberate exception to the
+  no-user-facing-literal rule. Do not add a `DeviceType` value, config key or config-flow branch for a
+  family; that is exactly what this design removed. See `docs/adding-a-device.md`.
+- **HID feature reports are shared plumbing plus a base family; Razer is the first protocol on it.**
+  `Sources/Hid/` holds `NativeHid` (raw `hid.dll` feature-report interop), `IHidTransport`/
+  `HidSharpTransport` (enumeration plus a protocol-agnostic `ExchangeAsync` that retries until the
+  caller's `isComplete` accepts the response) and `HidFamily`, the one family that runs every
+  `HidProtocol`. It owns everything not specific to a protocol: finding candidates by USB id, probing
+  which collection answers (by running the protocol's own `ReadAsync`), caching the answering path, and
+  binding several entries to distinct physical units. A protocol supplies its brand, USB vendor id,
+  devices and `ReadAsync` only. Razer uses feature reports (`HidReportKind.Feature`); Logitech HID++
+  writes output reports and reads input reports on the vendor interface `FF00:0002`
+  (`HidReportKind.InputOutput`, `IHidTransport.ExchangeReportsAsync`), where the receiver also pushes
+  unrelated notifications, so a reply must match device index, feature index and function. Behind a
+  Logitech receiver the mouse has no product id of its own, the receiver's is listed, and only device
+  index 1 answered on the tested setup. Logitech's headsets are a second protocol
+  on the same HID++ framing: `LogitechHidppProtocol` owns the feature lookup, the call and the reply
+  matching, and a product line supplies only its interface, device index, battery feature id, function
+  and the parsing of the answer (`LogitechProtocol` for the mice, `LogitechHeadsetProtocol` for the
+  headsets). Verified on a G Pro X Wireless `0ABA`: same HID++, but on `FF43:0202`,
+  addressed as the receiver (device index `0xFF`), and they have no battery feature at all - only
+  `0x1F20` (ADC measurement), which answers a voltage in mV, not a percentage, plus a state byte where
+  `0x03` means charging. The mV are mapped through HeadsetControl's G Pro calibration points, linearly
+  interpolated; that curve is an estimate, so treat the percentage as approximate and never as a value
+  to calibrate other code against. A powered-off headset reads far below the curve, which is why
+  `ParseVoltage` throws there instead of publishing 0%. Ask the device for its feature table
+  (`0x0001` getCount + getFeatureId) before assuming a feature index. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
+  and checksum. **Only the DeathAdder V3 Pro has been tested on real hardware.** The command class
+  (0x07, "power") and ids are plausibly shared across Razer mice, but a mouse is added to
+  `RazerProtocol.Devices` only after its battery was read on the device.
   The dongle answers on `mi_00`, confirmed against real hardware. HidSharp's `Open` only ever requests
   `GENERIC_READ|GENERIC_WRITE` and throws `DeviceIOException` when the control interface declines;
-  `NativeRazerHid` does what hidapi (and so the old Dart app) does - `CreateFile` with read+write,
+  `NativeHid` does what hidapi (and so the old Dart app) does - `CreateFile` with read+write,
   then retry with **zero access**, which still carries the `HidD_SetFeature` / `HidD_GetFeature`
   IOCTLs. HidSharp is kept only for enumeration + feature-report length. The response byte is
   `resp[10]` of the **raw** hidapi buffer (byte 0 is the report id) - never a span that skips the id
   byte. The dongle periodically answers a poll with a not-yet-ready placeholder frame (status
   `resp[1]` not `0x02`, command echo `resp[7..8]` absent, payload zeroed) while it is still talking to
   the mouse; `resp[10]` there is `0`, so trusting it without checking for a completed frame first would
-  surface as a spurious 0% reading every few minutes.
-  `DeathAdderV3ProReportProtocol.IsCompletedResponse` gates on status + command echo, and
-  `HidSharpRazerTransport.ExchangeAsync` re-issues the exchange (up to `MaxQueryAttempts`) until the
-  caller's predicate holds, then throws so the poll loop keeps the last good value instead of
-  publishing the 0. `FindCandidates` orders by interface ascending;
-  `DeathAdderV3ProBatterySourceProvider` probes each once and caches the answering path. Two entries
-  for the same model (two identical mice) are handled: the provider groups the candidates by physical
-  unit (`PhysicalUnitKey` - USB serial, else the parent-instance token in the device path) and deals
-  each entry a distinct unit in entry-id / unit-key order. Units with no serial are only
-  distinguishable by port, so a re-plug can swap which entry is which; the user renames to match.
-  `DeathAdderV3ProHardwareTests` (`[Explicit]`, `Category=Hardware`) exercises the real device. The
-  config flow never asks for a USB id or an interface: a Razer entry stores only `type` +
-  `catalogDevice` (the catalog id), and `DeviceModelCatalog` carries the vendor/product id the
-  provider matches on. `DeviceEntryReader` still reads the legacy `vendorId`/`productId` keys as a
-  fallback for entries an older build wrote. There is no in-UI "custom device" path by design (a raw
-  USB id alone cannot drive the Razer HID protocol); an unlisted device gets a `DeviceModelCatalog`
-  entry, per `docs/adding-a-device.md`.
+  surface as a spurious 0% reading every few minutes. `RazerProtocol.IsCompletedResponse` gates on
+  status + command echo, and `HidSharpTransport.ExchangeAsync` re-issues the exchange until the predicate
+  holds or `HidChannel.ReadBudget` (2 s) is up, then throws so the poll loop keeps the last good value instead of
+  publishing the 0. **The retry timing is tuned against a second process on the same control interface,
+  not just against the dongle.** Razer Synapse polls the very same interface, and `HidD_GetFeature`
+  returns whatever the device answered *last*, so Synapse's reply routinely lands in our buffer - with the
+  mouse on the cable that made every read fail, while wireless happened to win the race often enough. Two
+  things fix it: the window between `SetFeature` and `GetFeature` starts at 3 ms and only doubles up to
+  50 ms across attempts (`SettleDelay(attempt)`) - a wide first window is what hands the race to the other
+  poller, and a slow dongle still gets its time on a later attempt - and the delay between attempts is
+  randomized (20-120 ms), because a fixed rhythm can stay in lockstep with the other poller and never win.
+  `HardwareTests.Reads_while_a_foreign_poller_hammers_the_same_interface` reproduces exactly that: it runs
+  a competing serial-number poll at 20 ms on every Razer feature interface and still expects a reading.
+  A Razer wireless mouse has one product id per link, and only the live one answers the power class: on the
+  Basilisk V3 Pro the cable is `0x00AA` and the dongle `0x00AB`, and a dongle whose mouse is off the radio
+  answers every command - power *and* firmware - with status `0x04` ("command timeout"), which is exactly
+  how "the mouse is not on this link" looks. Never read that as a wrong transaction id: `0x1F`, `0x3F`,
+  `0x08`, `0x88`, `0x00`, `0x1E`, `0x9F` and `0x80` were all measured against a wired Basilisk V3 Pro and
+  every one of them answered `0x04` on the idle dongle and succeeded on the cable. `FindCandidates` orders by interface ascending; `HidFamily` probes
+  each once with the shorter `HidChannel.ProbeBudget` (for both report kinds), so a silent interface
+  cannot stall the poll, and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
+  `HidDeviceInfo` lists both (`FindCandidates` runs once per id) and `HidChannel.ProductId` says which is
+  in use. When a read fails `HidFamily` forgets the remembered interface, so the next poll probes again
+  and picks up a dongle-to-cable switch; without that, an unplugged-from-radio mouse whose dongle is
+  still in the PC would fail forever on the dongle. Two entries for the same model (two identical mice) are
+  handled: `HidFamily` groups the candidates by physical unit (`PhysicalUnitKey` - USB serial, else the
+  parent-instance token in the device path) and deals each entry a distinct unit in entry-id / unit-key
+  order. Units with no serial are only distinguishable by port, so a re-plug can swap which entry is
+  which; the user renames to match. `HidFamilyTests` and `HidProtocolTests` cover the family and a second protocol;
+  `HardwareTests` (`[Explicit]`, `Category=Hardware`) exercises the real devices. The
+  config flow never asks for a USB id or an interface. There is no in-UI "custom device" path by
+  design (a raw USB id alone cannot drive the Razer HID protocol); an unlisted device is a model in a
+  family.
 
 Authoritative upstream documentation, in the
 [Macro Deck 3 repository](https://github.com/Macro-Deck-App/Macro-Deck-3/tree/main/docs/plugin-development):
@@ -473,7 +525,7 @@ locks this in. Genuine runtime changes (a source appears mid-session) announce f
 - `Directory.Build.props` sets `Nullable`, `ImplicitUsings`, `latest-recommended` analysis,
   `EnforceCodeStyleInBuild` and `CS8602` as an error. Build warning-free; do not relax these to make a
   build pass.
-- C# in `src/` is tab-indented. Match the surrounding file rather than reformatting it.
+- C# is indented with four spaces. Match the surrounding file rather than reformatting it.
 - Suppress a diagnostic with the narrowest scope that fits and **always with a reason** on the
   `#pragma` or the `NoWarn` entry.
 - Comments explain non-obvious constraints - a race, a protocol rule, why a shape was chosen - not what
@@ -481,6 +533,9 @@ locks this in. Genuine runtime changes (a source appears mid-session) announce f
 - Write comments in English, regardless of the language used in chat or commit discussion.
 - No decorative comment formatting - no ASCII dividers, banners, box-drawing, or emoji. A comment is a
   plain sentence, not a header.
+- Write a comment as one or two plain `//` lines directly above the code it explains. No `<summary>`
+  blocks on internal types or members and none on tests unless the setup is non-obvious. A type or member
+  whose name already says it needs none.
 - Keep comments as short as the constraint allows, and prefer no comment at all. Only write one for
   genuinely non-obvious or complex logic (a race, a workaround, a protocol quirk) - never to restate what
   a well-named method or property already says.

@@ -49,7 +49,7 @@ public sealed class DeviceEntryReaderTests
     [Test]
     public async Task No_entries_yields_an_empty_list()
     {
-        var slots = await DeviceEntryReader.ReadAsync(new FakeConfig(), CancellationToken.None);
+        var slots = await DeviceEntryReader.ReadAsync(new FakeConfig(), TestModels.Catalog(), CancellationToken.None);
 
         Assert.That(slots, Is.Empty);
     }
@@ -87,13 +87,11 @@ public sealed class DeviceEntryReaderTests
                 {
                     ["type"] = "razer-deathadder-v3-pro",
                     ["name"] = "Mouse",
-                    ["vendorId"] = "0x1532",
-                    ["productId"] = "0x00B7",
                 }
             )
         );
 
-        var slots = (await DeviceEntryReader.ReadAsync(config, CancellationToken.None)).ToArray();
+        var slots = (await DeviceEntryReader.ReadAsync(config, TestModels.Catalog(), CancellationToken.None)).ToArray();
 
         Assert.That(slots.Select(s => s.Id), Is.EqualTo(["phone", "buds", "mouse"]));
 
@@ -107,16 +105,16 @@ public sealed class DeviceEntryReaderTests
             Assert.That(buds.Kind, Is.EqualTo(BatterySourceKind.Earbuds));
         }
 
-        var mouse = slots.Single(s => s.Type == DeviceType.RazerDeathAdderV3Pro);
+        var mouse = slots.Single(s => s.Type == DeviceType.Catalog);
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(mouse.VendorId, Is.EqualTo(0x1532));
-            Assert.That(mouse.ProductId, Is.EqualTo(0x00B7));
+            Assert.That(mouse.CatalogDeviceId, Is.EqualTo("razer-deathadder-v3-pro"));
+            Assert.That(mouse.Kind, Is.EqualTo(BatterySourceKind.Mouse));
         }
     }
 
     [Test]
-    public async Task A_catalog_mouse_gets_its_usb_id_from_the_catalog()
+    public async Task A_catalog_mouse_resolves_its_model_from_the_catalog_id()
     {
         var config = new FakeConfig(
             (
@@ -131,12 +129,12 @@ public sealed class DeviceEntryReaderTests
             )
         );
 
-        var mouse = (await DeviceEntryReader.ReadAsync(config, CancellationToken.None)).Single();
+        var mouse = (await DeviceEntryReader.ReadAsync(config, TestModels.Catalog(), CancellationToken.None)).Single();
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(mouse.VendorId, Is.EqualTo(0x1532));
-            Assert.That(mouse.ProductId, Is.EqualTo(0x00B7));
+            Assert.That(mouse.Type, Is.EqualTo(DeviceType.Catalog));
+            Assert.That(mouse.CatalogDeviceId, Is.EqualTo("razer-deathadder-v3-pro"));
         }
     }
 
@@ -166,7 +164,7 @@ public sealed class DeviceEntryReaderTests
             )
         );
 
-        var slots = (await DeviceEntryReader.ReadAsync(config, CancellationToken.None)).ToArray();
+        var slots = (await DeviceEntryReader.ReadAsync(config, TestModels.Catalog(), CancellationToken.None)).ToArray();
 
         Assert.That(slots.Select(s => s.Id), Is.EqualTo(["phone", "phone-2"]));
     }
