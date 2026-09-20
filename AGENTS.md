@@ -64,9 +64,10 @@ tests/DeviceBatteryInfo.Tests/
   BatteryIntegrationTests.cs      builds, initializes, the variables catalogue + a read work
   BatterySourceParsingTests.cs    dumpsys / Razer report / PnP / Win32 power-status parsers
   BatteryRegistryTests.cs         registry update / stale / retain, and catalog id round-trips
-  HardwareTests.cs                [Explicit, Category=Hardware]: lists Bluetooth and HID interfaces and reads
-                                  every supported HID device through the plugin; all output goes through
-                                  HardwareReport so every line has the same shape
+  HardwareTests.cs                [Explicit, Category=Hardware]: lists Bluetooth and HID interfaces, reads
+                                  every supported HID device through the plugin, and reads one again while a
+                                  foreign poller hammers the same control interface (the Synapse case); all
+                                  output goes through HardwareReport so every line has the same shape
 ```
 
 Design knowledge that is not obvious from the code alone:
@@ -193,7 +194,18 @@ Design knowledge that is not obvious from the code alone:
   (`HidReportKind.InputOutput`, `IHidTransport.ExchangeReportsAsync`), where the receiver also pushes
   unrelated notifications, so a reply must match device index, feature index and function. Behind a
   Logitech receiver the mouse has no product id of its own, the receiver's is listed, and only device
-  index 1 answered on the tested setup. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
+  index 1 answered on the tested setup. Logitech's headsets are a second protocol
+  on the same HID++ framing: `LogitechHidppProtocol` owns the feature lookup, the call and the reply
+  matching, and a product line supplies only its interface, device index, battery feature id, function
+  and the parsing of the answer (`LogitechProtocol` for the mice, `LogitechHeadsetProtocol` for the
+  headsets). Verified on a G Pro X Wireless `0ABA`: same HID++, but on `FF43:0202`,
+  addressed as the receiver (device index `0xFF`), and they have no battery feature at all - only
+  `0x1F20` (ADC measurement), which answers a voltage in mV, not a percentage, plus a state byte where
+  `0x03` means charging. The mV are mapped through HeadsetControl's G Pro calibration points, linearly
+  interpolated; that curve is an estimate, so treat the percentage as approximate and never as a value
+  to calibrate other code against. A powered-off headset reads far below the curve, which is why
+  `ParseVoltage` throws there instead of publishing 0%. Ask the device for its feature table
+  (`0x0001` getCount + getFeatureId) before assuming a feature index. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
   and checksum. **Only the DeathAdder V3 Pro has been tested on real hardware.** The command class
   (0x07, "power") and ids are plausibly shared across Razer mice, but a mouse is added to
   `RazerProtocol.Devices` only after its battery was read on the device.
@@ -207,12 +219,26 @@ Design knowledge that is not obvious from the code alone:
   `resp[1]` not `0x02`, command echo `resp[7..8]` absent, payload zeroed) while it is still talking to
   the mouse; `resp[10]` there is `0`, so trusting it without checking for a completed frame first would
   surface as a spurious 0% reading every few minutes. `RazerProtocol.IsCompletedResponse` gates on
-  status + command echo, and `HidSharpTransport.ExchangeAsync` re-issues the exchange (a short, growing settle delay
-  and a jittered retry delay, so it does not stay in lockstep with a foreign poller such as vendor software)
-  until the predicate holds or the budget runs out (`HidChannel.ReadBudget`, 2 s), then throws so the poll
-  loop keeps the last good value instead of publishing the 0. `FindCandidates` orders by interface
-  ascending; `HidFamily` probes each once with the shorter `HidChannel.ProbeBudget`, so a silent
-  interface cannot stall the poll, and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
+  status + command echo, and `HidSharpTransport.ExchangeAsync` re-issues the exchange until the predicate
+  holds or `HidChannel.ReadBudget` (2 s) is up, then throws so the poll loop keeps the last good value instead of
+  publishing the 0. **The retry timing is tuned against a second process on the same control interface,
+  not just against the dongle.** Razer Synapse polls the very same interface, and `HidD_GetFeature`
+  returns whatever the device answered *last*, so Synapse's reply routinely lands in our buffer - with the
+  mouse on the cable that made every read fail, while wireless happened to win the race often enough. Two
+  things fix it: the window between `SetFeature` and `GetFeature` starts at 3 ms and only doubles up to
+  50 ms across attempts (`SettleDelay(attempt)`) - a wide first window is what hands the race to the other
+  poller, and a slow dongle still gets its time on a later attempt - and the delay between attempts is
+  randomized (20-120 ms), because a fixed rhythm can stay in lockstep with the other poller and never win.
+  `HardwareTests.Reads_while_a_foreign_poller_hammers_the_same_interface` reproduces exactly that: it runs
+  a competing serial-number poll at 20 ms on every Razer feature interface and still expects a reading.
+  A Razer wireless mouse has one product id per link, and only the live one answers the power class: on the
+  Basilisk V3 Pro the cable is `0x00AA` and the dongle `0x00AB`, and a dongle whose mouse is off the radio
+  answers every command - power *and* firmware - with status `0x04` ("command timeout"), which is exactly
+  how "the mouse is not on this link" looks. Never read that as a wrong transaction id: `0x1F`, `0x3F`,
+  `0x08`, `0x88`, `0x00`, `0x1E`, `0x9F` and `0x80` were all measured against a wired Basilisk V3 Pro and
+  every one of them answered `0x04` on the idle dongle and succeeded on the cable. `FindCandidates` orders by interface ascending; `HidFamily` probes
+  each once with the shorter `HidChannel.ProbeBudget` (for both report kinds), so a silent interface
+  cannot stall the poll, and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
   `HidDeviceInfo` lists both (`FindCandidates` runs once per id) and `HidChannel.ProductId` says which is
   in use. When a read fails `HidFamily` forgets the remembered interface, so the next poll probes again
   and picks up a dongle-to-cable switch; without that, an unplugged-from-radio mouse whose dongle is

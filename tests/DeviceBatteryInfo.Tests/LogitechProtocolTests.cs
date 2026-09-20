@@ -15,11 +15,14 @@ public sealed class LogitechProtocolTests
     private static readonly byte[] FeatureAnswer = Frame("110100010600050000000000");
     private static readonly byte[] StatusAnswer = Frame("110106115008000000000000");
 
+    private static bool IsReplyTo(byte[] report, byte featureIndex, byte function) =>
+        LogitechHidppProtocol.IsReplyTo(report, LogitechProtocol.DeviceIndex, featureIndex, function);
+
     [Test]
     public void The_battery_feature_lookup_asks_for_feature_1004_in_bytes_four_and_five()
     {
         Assert.That(
-            LogitechProtocol.BuildFeatureRequest(0x1004),
+            LogitechHidppProtocol.BuildFeatureRequest(LogitechProtocol.DeviceIndex, 0x1004),
             Is.EqualTo(new byte[] { 0x11, 0x01, 0x00, 0x01, 0x10, 0x04 })
         );
     }
@@ -31,7 +34,7 @@ public sealed class LogitechProtocolTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(LogitechProtocol.ParseFeatureIndex(FeatureAnswer), Is.EqualTo(6));
+            Assert.That(LogitechHidppProtocol.ParseFeatureIndex(FeatureAnswer), Is.EqualTo(6));
             Assert.That(reading.Percent, Is.EqualTo(80));
             Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Discharging));
         }
@@ -52,9 +55,9 @@ public sealed class LogitechProtocolTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(LogitechProtocol.IsReplyTo(notification, 6, 0x11), Is.False);
-            Assert.That(LogitechProtocol.IsReplyTo(StatusAnswer, 6, 0x11), Is.True);
-            Assert.That(LogitechProtocol.IsReplyTo(StatusAnswer, 6, 0x01), Is.False);
+            Assert.That(IsReplyTo(notification, 6, 0x11), Is.False);
+            Assert.That(IsReplyTo(StatusAnswer, 6, 0x11), Is.True);
+            Assert.That(IsReplyTo(StatusAnswer, 6, 0x01), Is.False);
         }
     }
 
@@ -63,7 +66,7 @@ public sealed class LogitechProtocolTests
     {
         var missing = Frame("110100010000000000000000");
 
-        Assert.Throws<NotSupportedException>(() => LogitechProtocol.ParseFeatureIndex(missing));
+        Assert.Throws<NotSupportedException>(() => LogitechHidppProtocol.ParseFeatureIndex(missing));
     }
 
     private sealed class ReceiverTransport : IHidTransport
@@ -97,6 +100,7 @@ public sealed class LogitechProtocolTests
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
+            TimeSpan budget,
             CancellationToken cancellationToken
         )
         {

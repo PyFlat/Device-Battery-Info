@@ -47,7 +47,13 @@ internal sealed class HidChannel(
                 budget ?? ReadBudget,
                 cancellationToken
             )
-            : transport.ExchangeReportsAsync(devicePath, request, isComplete, cancellationToken);
+            : transport.ExchangeReportsAsync(
+                devicePath,
+                request,
+                isComplete,
+                budget ?? ReadBudget,
+                cancellationToken
+            );
 }
 
 // Subclass it, list the devices and implement ReadAsync. Finding the device is done for you.

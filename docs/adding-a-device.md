@@ -57,8 +57,9 @@ internal sealed class LogitechProtocol() : HidProtocol("Logitech", vendorId: 0x0
 }
 ```
 
-`Sources/Logitech/LogitechProtocol.cs` is the real, hardware-verified version of this (HID++ 2.0). What
-each part means:
+`Sources/Logitech/LogitechProtocol.cs` is the real, hardware-verified version of this (HID++ 2.0). It
+sits on `LogitechHidppProtocol`, which holds the framing every Logitech device shares, so a second
+Logitech device is a feature id, a function and a parser. What each part means:
 
 - `vendorId` is the brand's USB vendor id. `reportLength` is the smallest report the right interface
   supports.
