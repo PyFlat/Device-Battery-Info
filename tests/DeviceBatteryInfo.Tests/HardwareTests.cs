@@ -15,7 +15,12 @@ namespace DeviceBatteryInfo.Tests;
 [Category("Hardware")]
 public sealed class HardwareTests
 {
-    private static readonly HidProtocol[] Protocols = [new RazerProtocol(), new LogitechProtocol()];
+    private static readonly HidProtocol[] Protocols =
+    [
+        new RazerProtocol(),
+        new LogitechProtocol(),
+        new LogitechHeadsetProtocol(),
+    ];
 
     [SetUp]
     public void RequireWindows() => Assume.That(OperatingSystem.IsWindows());
