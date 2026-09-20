@@ -187,7 +187,8 @@ Design knowledge that is not obvious from the code alone:
   `type=razer-deathadder-v3-pro` (model id as the type) and ignores the retired `vendorId`/`productId`
   keys. Brand and model names are proper nouns and are the one deliberate exception to the
   no-user-facing-literal rule. Do not add a `DeviceType` value, config key or config-flow branch for a
-  family; that is exactly what this design removed. See `docs/adding-a-device.md`.
+  family; that is exactly what this design removed. Adding or removing a model also means updating the
+  "Supported devices" table in `README.md`. See `docs/adding-a-device.md`.
 - **HID feature reports are shared plumbing plus a base family; Razer is the first protocol on it.**
   `Sources/Hid/` holds `NativeHid` (raw `hid.dll` feature-report interop), `IHidTransport`/
   `HidSharpTransport` (enumeration plus a protocol-agnostic `ExchangeAsync` that retries until the
