@@ -154,7 +154,13 @@ internal sealed class HidFamily(
         {
             try
             {
-                var channel = new HidChannel(transport, candidate.Path, candidate.ProductId, model.Protocol.ReportKind);
+                var channel = new HidChannel(
+                    transport,
+                    candidate.Path,
+                    candidate.ProductId,
+                    model.Protocol.ReportKind,
+                    HidChannel.ProbeBudget
+                );
                 _ = await model.Protocol.ReadAsync(channel, model.Device, cancellationToken);
                 _resolvedPaths[slot.Id] = candidate.Path;
                 _logger.Information(

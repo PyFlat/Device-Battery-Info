@@ -31,11 +31,12 @@ internal interface IHidTransport
 
     IReadOnlyList<HidCandidate> ListFeatureReportDevices();
 
-    // Retries until isComplete accepts the response, then throws.
+    // Retries until isComplete accepts the response or the budget runs out, then throws.
     Task<byte[]> ExchangeAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
+        TimeSpan budget,
         CancellationToken cancellationToken
     );
 
@@ -55,7 +56,6 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
     private static readonly TimeSpan MaxSettleDelay = TimeSpan.FromMilliseconds(50);
 
     // Jittered, so retries do not stay in lockstep with a placeholder frame or a foreign poller.
-    private static readonly TimeSpan QueryBudget = TimeSpan.FromMilliseconds(2000);
     private static readonly TimeSpan MinRetryDelay = TimeSpan.FromMilliseconds(20);
     private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromMilliseconds(120);
 
@@ -93,6 +93,7 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
+        TimeSpan budget,
         CancellationToken cancellationToken
     )
     {
@@ -139,11 +140,11 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
                 Convert.ToHexString(response)
             );
 
-            if (clock.Elapsed >= QueryBudget)
+            if (clock.Elapsed >= budget)
             {
                 throw new InvalidOperationException(
                     $"HID feature-report exchange on {devicePath} did not complete within "
-                        + $"{QueryBudget.TotalMilliseconds} ms ({attempt} attempts). Vendor software polling the "
+                        + $"{budget.TotalMilliseconds} ms ({attempt} attempts). Vendor software polling the "
                         + "same device can keep answering in its place."
                 );
             }

@@ -220,7 +220,7 @@ Design knowledge that is not obvious from the code alone:
   the mouse; `resp[10]` there is `0`, so trusting it without checking for a completed frame first would
   surface as a spurious 0% reading every few minutes. `RazerProtocol.IsCompletedResponse` gates on
   status + command echo, and `HidSharpTransport.ExchangeAsync` re-issues the exchange until the predicate
-  holds or `QueryBudget` (2 s) is up, then throws so the poll loop keeps the last good value instead of
+  holds or `HidChannel.ReadBudget` (2 s) is up, then throws so the poll loop keeps the last good value instead of
   publishing the 0. **The retry timing is tuned against a second process on the same control interface,
   not just against the dongle.** Razer Synapse polls the very same interface, and `HidD_GetFeature`
   returns whatever the device answered *last*, so Synapse's reply routinely lands in our buffer - with the
@@ -237,7 +237,8 @@ Design knowledge that is not obvious from the code alone:
   how "the mouse is not on this link" looks. Never read that as a wrong transaction id: `0x1F`, `0x3F`,
   `0x08`, `0x88`, `0x00`, `0x1E`, `0x9F` and `0x80` were all measured against a wired Basilisk V3 Pro and
   every one of them answered `0x04` on the idle dongle and succeeded on the cable. `FindCandidates` orders by interface ascending; `HidFamily` probes
-  each once and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
+  each once with the shorter `HidChannel.ProbeBudget`, so a silent interface cannot stall the poll, and
+  caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
   `HidDeviceInfo` lists both (`FindCandidates` runs once per id) and `HidChannel.ProductId` says which is
   in use. When a read fails `HidFamily` forgets the remembered interface, so the next poll probes again
   and picks up a dongle-to-cable switch; without that, an unplugged-from-radio mouse whose dongle is

@@ -38,6 +38,7 @@ public sealed class HidFamilyTests
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
+            TimeSpan budget,
             CancellationToken cancellationToken
         )
         {
