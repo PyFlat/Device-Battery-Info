@@ -116,6 +116,12 @@ Design knowledge that is not obvious from the code alone:
   large, bold reading (a tile is one device). A progress bar's `StartColor` and `EndColor` are always
   the same hex - the renderer always paints a `linear-gradient`, and a two-colour battery bar just
   muddies the reading.
+- **A widget press refreshes the batteries, and the host will not run user-bound flows for a plugin
+  widget.** `ExecuteActionButtonTriggerRequestMessageHandler` returns "nothing to do" for any widget whose
+  type is not built in, so an actions-list editor bound to `flows` saves fine and never fires. A tree that
+  declares a `press` event also owns the gesture (`treeClaimsGesture`), so the host skips the tile's own
+  triggers. `BatteryWidgetView.Build` therefore takes an optional `onPress`, passed only for a live widget
+  session (never for the sample or the previews), which calls `BatteryPollingService.RequestRefresh`.
 - **Widget previews:** `Ui/BatteryWidgetPreviews.cs` has one `static` parameterless method per
   scenario, each `[UiPreview(name, View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]`
   returning a `UiElement`. `UiPreviewCatalog.Scan` (run by the hosting `ui` capability over the

@@ -107,7 +107,10 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         );
 
         var state = new UiState<BatteryWidgetModel>(initial);
-        var view = new UiView(surface, BatteryWidgetView.Build(localId, state, cornerRadius));
+        var view = new UiView(
+            surface,
+            BatteryWidgetView.Build(localId, state, cornerRadius, _polling.RequestRefresh)
+        );
 
         void Refresh() => state.Set(Compute());
         void OnRegistryChanged(object? sender, BatterySnapshotChangedEventArgs e) => Refresh();

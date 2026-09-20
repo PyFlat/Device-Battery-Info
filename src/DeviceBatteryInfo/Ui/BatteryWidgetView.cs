@@ -15,11 +15,22 @@ internal static class BatteryWidgetView
     public static UiElement Build(
         string widgetLocalId,
         UiState<BatteryWidgetModel> state,
-        int cornerRadius
-    ) =>
-        widgetLocalId == BatteryWidgetTypes.TileId
-            ? Tile(state, cornerRadius)
-            : Panel(state, cornerRadius);
+        int cornerRadius,
+        Action? onPress = null
+    )
+    {
+        UiStack root =
+            widgetLocalId == BatteryWidgetTypes.TileId
+                ? Tile(state, cornerRadius)
+                : Panel(state, cornerRadius);
+
+        return onPress is null
+            ? root
+            : root with
+            {
+                Events = [UiEventHandler.On(UiComponentEvents.Press, onPress)],
+            };
+    }
 
     private static UiSize SafeArea(int cornerRadius)
     {
@@ -321,10 +332,7 @@ internal static class BatteryWidgetView
     private static UiProgressReference Progress(int percent) =>
         UiProgressReference.Halted(Math.Clamp(percent, 0, 100), DateTimeOffset.UtcNow, 100);
 
-    private static LocalizedText? Caption(
-        BatteryWidgetRow row,
-        BatteryWidgetOptions options
-    )
+    private static LocalizedText? Caption(BatteryWidgetRow row, BatteryWidgetOptions options)
     {
         if (row.Stale)
         {

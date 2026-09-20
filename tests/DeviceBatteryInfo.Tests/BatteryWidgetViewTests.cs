@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Ui;
+using MacroDeck.Ui.Model.Events;
 using MacroDeck.Ui.Model.Surfaces;
 using MacroDeck.Ui.Previews;
 using MacroDeck.Ui.Runtime;
@@ -45,6 +46,37 @@ public sealed class BatteryWidgetViewTests
 
         Assert.That(view.Tree, Is.Not.Null);
         Assert.That(view.Tree.Root, Is.Not.Null);
+    }
+
+    [TestCase(BatteryWidgetTypes.PanelId, "battery-panel")]
+    [TestCase(BatteryWidgetTypes.TileId, "battery-tile")]
+    public void Pressing_the_widget_runs_the_press_callback(string widgetId, string rootId)
+    {
+        var presses = 0;
+        var state = new UiState<BatteryWidgetModel>(
+            new BatteryWidgetModel([Row(72)], BatteryWidgetOptions.Default)
+        );
+        var view = new UiView(
+            WidgetSurface(),
+            BatteryWidgetView.Build(widgetId, state, 16, () => presses++)
+        );
+
+        var result = view.Dispatch(new UiEvent { NodeId = rootId, Name = "press" });
+
+        Assert.That(result.IsAccepted, Is.True);
+        Assert.That(presses, Is.EqualTo(1));
+    }
+
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    [TestCase(BatteryWidgetTypes.TileId)]
+    public void Without_a_press_callback_the_tree_declares_no_events(string widgetId)
+    {
+        var state = new UiState<BatteryWidgetModel>(
+            new BatteryWidgetModel([Row(72)], BatteryWidgetOptions.Default)
+        );
+        var view = new UiView(WidgetSurface(), BatteryWidgetView.Build(widgetId, state, 16));
+
+        Assert.That(JsonSerializer.Serialize(view.Tree), Does.Not.Contain("\"events\""));
     }
 
     [TestCase(BatteryWidgetTypes.PanelId)]
