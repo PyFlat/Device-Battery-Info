@@ -32,7 +32,7 @@ public sealed class DeviceConfigFlowTests
     private static DeviceConfigFlow Flow(IReadOnlyList<BatterySlot>? current = null) =>
         new(new FakeDiscovery(), TestModels.Catalog(), current ?? [], Serilog.Core.Logger.None);
 
-    /// <summary>Drives start -> basics -> (other) -> (details) on one flow instance, the way the host does.</summary>
+    // Drives start, basics, other and details on one flow instance, the way the host does.
     private static async Task<ConfigFlowResult> RunAsync(
         DeviceConfigFlow flow,
         Dictionary<string, object?> basics,

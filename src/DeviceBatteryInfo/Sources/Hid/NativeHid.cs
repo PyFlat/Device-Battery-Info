@@ -5,13 +5,8 @@ using Microsoft.Win32.SafeHandles;
 
 namespace DeviceBatteryInfo.Sources.Hid;
 
-/// <summary>
-/// A direct <c>hid.dll</c> feature-report round trip: open the device for read+write, and when the
-/// Razer control interface refuses that, reopen with <em>no</em> access at all - a zero-access handle
-/// still carries the <c>HidD_SetFeature</c> / <c>HidD_GetFeature</c> IOCTLs. HidSharp only ever
-/// requests read+write and throws <c>DeviceIOException</c> when the device declines, so it cannot
-/// reach this interface at all; going through <c>hid.dll</c> directly (matching hidapi) can.
-/// </summary>
+// hid.dll directly, like hidapi. HidSharp only opens read+write and fails on interfaces that refuse it,
+// while a zero-access handle still carries the HidD_SetFeature and HidD_GetFeature IOCTLs.
 [SupportedOSPlatform("windows")]
 internal static class NativeHid
 {

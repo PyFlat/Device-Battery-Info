@@ -47,6 +47,13 @@ public sealed class HidProtocolTests
 
         public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => [Device];
 
+        public Task<byte[]> ExchangeReportsAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
         public Task<byte[]> ExchangeAsync(
             string devicePath,
             byte[] request,
@@ -118,6 +125,13 @@ public sealed class HidProtocolTests
             };
 
         public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => [Dongle, Cable];
+
+        public Task<byte[]> ExchangeReportsAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
 
         public Task<byte[]> ExchangeAsync(
             string devicePath,

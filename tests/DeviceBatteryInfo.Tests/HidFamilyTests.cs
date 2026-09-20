@@ -27,6 +27,13 @@ public sealed class HidFamilyTests
 
         public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => candidates;
 
+        public Task<byte[]> ExchangeReportsAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
         public Task<byte[]> ExchangeAsync(
             string devicePath,
             byte[] request,
@@ -42,9 +49,7 @@ public sealed class HidFamilyTests
                 throw new InvalidOperationException("HidD_GetFeature failed.");
             }
 
-            // A minimal completed frame carrying value 180 at the response-value index (see
-            // RazerProtocol) - the exact command being asked does not matter here,
-            // the protocol encoding itself is covered by BatterySourceParsingTests.
+            // A minimal completed frame with the value 180 at the response index.
             var response = new byte[11];
             response[10] = 180;
             return Task.FromResult(response);
@@ -138,82 +143,5 @@ public sealed class HidFamilyTests
         var sources = await DiscoverAsync(transport, MouseSlot("mouse-a", "Mouse A"), MouseSlot("mouse-b", "Mouse B"));
 
         Assert.That(sources.Select(s => s.Id), Is.EqualTo(["mouse-a"]));
-    }
-}
-
-/// <summary>Talks to any connected Razer HID device over hid.dll, dongle or cable, and prints what each
-/// interface answers. Explicit: run it with <c>dotnet test --filter Category=Hardware</c> from the test
-/// project, once per connection mode.</summary>
-[TestFixture]
-[Explicit]
-[Category("Hardware")]
-public sealed class RazerHardwareTests
-{
-    [Test]
-    public async Task Reads_battery_from_every_connected_razer_device()
-    {
-        Assume.That(OperatingSystem.IsWindows());
-
-        var transport = new HidSharpTransport(Serilog.Core.Logger.None);
-        var razer = new RazerProtocol();
-        var candidates = transport
-            .ListFeatureReportDevices()
-            .Where(c => c.VendorId == razer.VendorId && c.FeatureReportLength >= razer.ReportLength)
-            .ToArray();
-        foreach (var candidate in candidates)
-        {
-            TestContext.Out.WriteLine(
-                $"pid {candidate.ProductId:X4} iface {candidate.InterfaceNumber} len {candidate.FeatureReportLength} {candidate.ProductName} {candidate.Path}"
-            );
-        }
-
-        Assert.That(candidates, Is.Not.Empty, "No Razer HID interface with a large enough feature report.");
-
-        var answered = false;
-        foreach (var candidate in candidates)
-        {
-            var channel = new HidChannel(transport, candidate.Path, candidate.ProductId);
-            try
-            {
-                var raw = await RazerProtocol.QueryAsync(
-                    channel,
-                    RazerProtocol.CommandBatteryLevel,
-                    CancellationToken.None
-                );
-                var charging = await RazerProtocol.QueryAsync(
-                    channel,
-                    RazerProtocol.CommandChargingStatus,
-                    CancellationToken.None
-                );
-                TestContext.Out.WriteLine(
-                    $"  -> pid {candidate.ProductId:X4} iface {candidate.InterfaceNumber} answered: {RazerProtocol.PercentFromRaw(raw)}% charging={charging == 1}"
-                );
-                answered = true;
-            }
-            catch (Exception exception)
-            {
-                TestContext.Out.WriteLine(
-                    $"  -> pid {candidate.ProductId:X4} iface {candidate.InterfaceNumber} failed: {exception.Message}"
-                );
-                try
-                {
-                    var frame = await transport.ExchangeAsync(
-                        candidate.Path,
-                        RazerProtocol.BuildRequest(RazerProtocol.CommandBatteryLevel),
-                        _ => true,
-                        CancellationToken.None
-                    );
-                    TestContext.Out.WriteLine(
-                        $"     raw answer (byte 1 status, 7 command class, 8 command id): {Convert.ToHexString(frame.AsSpan(0, Math.Min(frame.Length, 16)))}"
-                    );
-                }
-                catch (Exception rawException)
-                {
-                    TestContext.Out.WriteLine($"     no raw answer: {rawException.Message}");
-                }
-            }
-        }
-
-        Assert.That(answered, Is.True, "No interface answered the battery request.");
     }
 }

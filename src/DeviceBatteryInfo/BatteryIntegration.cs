@@ -66,8 +66,7 @@ public sealed partial class BatteryIntegration(
             );
             _catalog.Set(configured);
         }
-        // The host can call this several times in a row after a config change; swallow a read
-        // failure instead of throwing so it doesn't tear down the whole integration.
+        // The host calls this repeatedly after config changes; a failed read must not tear it down.
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.Warning(
@@ -97,8 +96,7 @@ public sealed partial class BatteryIntegration(
     private IReadOnlyList<VariableDefinition> CatalogDefinitions() =>
         BatteryVariableCatalog.Build(CurrentSlots());
 
-    // Configured devices plus any the registry has actually seen - the latter is what lets a
-    // contributed IBatterySourceProvider expose variables without also touching the config flow.
+    // Configured devices plus any the registry has seen, so a contributed provider needs no config flow.
     private List<BatterySlot> CurrentSlots()
     {
         var slots = _catalog.Devices.ToList();
@@ -124,7 +122,7 @@ public sealed partial class BatteryIntegration(
     private void OnDeviceCatalogChanged(object? sender, EventArgs e)
     {
         // Just re-poll. Never call IPluginCatalogNotifier.CatalogChanged from here: it re-enters
-        // InitializeAsync, which would call it again - an infinite re-registration loop.
+        // InitializeAsync, which would call it again: an infinite re-registration loop.
         _polling.RequestRefresh();
     }
 

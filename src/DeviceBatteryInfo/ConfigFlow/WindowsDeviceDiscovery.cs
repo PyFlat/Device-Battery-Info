@@ -25,8 +25,8 @@ internal sealed class WindowsDeviceDiscovery(
     public Task<IReadOnlyList<DiscoveredHidDevice>> ListHidDevicesAsync(
         CancellationToken cancellationToken
     ) =>
-        // HidSharp opens every device to read its report descriptor, which can block - keep it off
-        // the caller's thread
+        // HidSharp opens every device to read its report descriptor, which can block.
+        // Keep it off the caller's thread.
         Task.Run<IReadOnlyList<DiscoveredHidDevice>>(
             () =>
                 hidTransport

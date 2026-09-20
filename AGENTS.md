@@ -64,6 +64,9 @@ tests/DeviceBatteryInfo.Tests/
   BatteryIntegrationTests.cs      builds, initializes, the variables catalogue + a read work
   BatterySourceParsingTests.cs    dumpsys / Razer report / PnP / Win32 power-status parsers
   BatteryRegistryTests.cs         registry update / stale / retain, and catalog id round-trips
+  HardwareTests.cs                [Explicit, Category=Hardware]: lists Bluetooth and HID interfaces and reads
+                                  every supported HID device through the plugin; all output goes through
+                                  HardwareReport so every line has the same shape
 ```
 
 Design knowledge that is not obvious from the code alone:
@@ -185,7 +188,12 @@ Design knowledge that is not obvious from the code alone:
   `HidProtocol`. It owns everything not specific to a protocol: finding candidates by USB id, probing
   which collection answers (by running the protocol's own `ReadAsync`), caching the answering path, and
   binding several entries to distinct physical units. A protocol supplies its brand, USB vendor id,
-  devices and `ReadAsync` only. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
+  devices and `ReadAsync` only. Razer uses feature reports (`HidReportKind.Feature`); Logitech HID++
+  writes output reports and reads input reports on the vendor interface `FF00:0002`
+  (`HidReportKind.InputOutput`, `IHidTransport.ExchangeReportsAsync`), where the receiver also pushes
+  unrelated notifications, so a reply must match device index, feature index and function. Behind a
+  Logitech receiver the mouse has no product id of its own, the receiver's is listed, and only device
+  index 1 answered on the tested setup. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
   and checksum. **Only the DeathAdder V3 Pro has been tested on real hardware.** The command class
   (0x07, "power") and ids are plausibly shared across Razer mice, but a mouse is added to
   `RazerProtocol.Devices` only after its battery was read on the device.
@@ -211,7 +219,7 @@ Design knowledge that is not obvious from the code alone:
   parent-instance token in the device path) and deals each entry a distinct unit in entry-id / unit-key
   order. Units with no serial are only distinguishable by port, so a re-plug can swap which entry is
   which; the user renames to match. `HidFamilyTests` and `HidProtocolTests` cover the family and a second protocol;
-  `DeathAdderV3ProHardwareTests` (`[Explicit]`, `Category=Hardware`) exercises the real device. The
+  `HardwareTests` (`[Explicit]`, `Category=Hardware`) exercises the real devices. The
   config flow never asks for a USB id or an interface. There is no in-UI "custom device" path by
   design (a raw USB id alone cannot drive the Razer HID protocol); an unlisted device is a model in a
   family.
@@ -489,7 +497,7 @@ locks this in. Genuine runtime changes (a source appears mid-session) announce f
 - `Directory.Build.props` sets `Nullable`, `ImplicitUsings`, `latest-recommended` analysis,
   `EnforceCodeStyleInBuild` and `CS8602` as an error. Build warning-free; do not relax these to make a
   build pass.
-- C# in `src/` is tab-indented. Match the surrounding file rather than reformatting it.
+- C# is indented with four spaces. Match the surrounding file rather than reformatting it.
 - Suppress a diagnostic with the narrowest scope that fits and **always with a reason** on the
   `#pragma` or the `NoWarn` entry.
 - Comments explain non-obvious constraints - a race, a protocol rule, why a shape was chosen - not what
@@ -497,6 +505,9 @@ locks this in. Genuine runtime changes (a source appears mid-session) announce f
 - Write comments in English, regardless of the language used in chat or commit discussion.
 - No decorative comment formatting - no ASCII dividers, banners, box-drawing, or emoji. A comment is a
   plain sentence, not a header.
+- Write a comment as one or two plain `//` lines directly above the code it explains. No `<summary>`
+  blocks on internal types or members and none on tests unless the setup is non-obvious. A type or member
+  whose name already says it needs none.
 - Keep comments as short as the constraint allows, and prefer no comment at all. Only write one for
   genuinely non-obvious or complex logic (a race, a workaround, a protocol quirk) - never to restate what
   a well-named method or property already says.

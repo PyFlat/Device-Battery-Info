@@ -2,7 +2,6 @@ using System.Diagnostics;
 
 namespace DeviceBatteryInfo.Sources.Bluetooth;
 
-// Interface so this can be tested without shelling out to PowerShell
 internal interface IPnpBatteryReader
 {
     Task<string?> ReadRawAsync(string friendlyName, CancellationToken cancellationToken);

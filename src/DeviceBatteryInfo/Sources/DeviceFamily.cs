@@ -2,8 +2,8 @@ using DeviceBatteryInfo.Core;
 
 namespace DeviceBatteryInfo.Sources;
 
-/// <summary>A product listed under "Other devices". Its id is derived from brand and name and is stored
-/// in user data, so renaming a shipped model breaks existing entries.</summary>
+// The id is derived from brand and name and stored in user data, so renaming a shipped model
+// breaks existing entries.
 public record DeviceModel(
     string Brand,
     string Name,
@@ -15,33 +15,30 @@ public record DeviceModel(
     public string BrandId { get; } = BatterySlots.Slug(Brand);
 }
 
-/// <summary>A protocol and the models that speak it. Every implementation in this assembly is registered
-/// automatically.</summary>
+// Every implementation in this assembly is registered automatically.
 public interface IDeviceFamily
 {
     IReadOnlyList<DeviceModel> Models { get; }
 
-    /// <summary>Called every poll cycle with the configured devices whose model is in <see cref="Models"/>.
-    /// Returns one source per device that is connected, and nothing for the rest.</summary>
+    // Called every poll cycle. Returns a source per connected device and nothing for the rest.
     ValueTask<IReadOnlyList<IBatterySource>> DiscoverAsync(
         IReadOnlyList<(BatterySlot Slot, DeviceModel Model)> entries,
         CancellationToken cancellationToken
     );
 }
 
-/// <summary>A family for devices that need no discovery: list the models and read one.</summary>
 internal abstract class SimpleDeviceFamily : IDeviceFamily
 {
     public abstract IReadOnlyList<DeviceModel> Models { get; }
 
-    /// <summary>Throw when the read fails; the poll loop then keeps the last value and marks it stale.</summary>
+    // Throw when the read fails. The poll loop keeps the last value and marks it stale.
     protected abstract ValueTask<BatteryReading> ReadAsync(
         DeviceModel model,
         BatterySlot slot,
         CancellationToken cancellationToken
     );
 
-    /// <summary>A device that is not present is left out of the poll and hidden from widgets.</summary>
+    // An absent device is left out of the poll and hidden from widgets.
     protected virtual ValueTask<bool> IsPresentAsync(
         DeviceModel model,
         BatterySlot slot,

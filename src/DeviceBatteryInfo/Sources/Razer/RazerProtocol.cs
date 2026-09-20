@@ -3,8 +3,7 @@ using DeviceBatteryInfo.Sources.Hid;
 
 namespace DeviceBatteryInfo.Sources.Razer;
 
-/// <summary>Razer's HID power-class report. Verified on the DeathAdder V3 Pro only: add another mouse
-/// after reading its battery on the real device.</summary>
+// Add a mouse only after reading its battery on the real device.
 internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, RequestLength)
 {
     private const int RequestLength = 90;

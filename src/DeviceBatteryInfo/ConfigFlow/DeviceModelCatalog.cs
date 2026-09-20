@@ -4,7 +4,6 @@ using MacroDeck.Localization;
 
 namespace DeviceBatteryInfo.ConfigFlow;
 
-/// <summary>Every model listed under "Other devices", collected from the registered device families.</summary>
 public sealed class DeviceModelCatalog(IEnumerable<IDeviceFamily> families)
 {
     private readonly IReadOnlyList<DeviceModel> _entries =

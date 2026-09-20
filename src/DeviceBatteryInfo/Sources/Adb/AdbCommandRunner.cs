@@ -3,7 +3,6 @@ using System.Text;
 
 namespace DeviceBatteryInfo.Sources.Adb;
 
-// Interface so this can be tested without a real device
 internal interface IAdbCommandRunner
 {
     Task<string> RunAsync(

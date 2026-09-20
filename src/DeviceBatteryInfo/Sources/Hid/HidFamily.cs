@@ -4,8 +4,6 @@ using Serilog;
 
 namespace DeviceBatteryInfo.Sources.Hid;
 
-/// <summary>Runs every <see cref="HidProtocol"/>: finds each configured device by USB id, works out which
-/// HID interface answers and keeps identical units apart.</summary>
 internal sealed class HidFamily(
     IEnumerable<HidProtocol> protocols,
     IHidTransport transport,
@@ -47,9 +45,11 @@ internal sealed class HidFamily(
                         model.Protocol.VendorId,
                         productId,
                         interfaceNumber: null,
-                        model.Protocol.ReportLength
+                        model.Protocol.ReportKind == HidReportKind.Feature
+                            ? model.Protocol.ReportLength
+                            : 0
                     )
-                ),
+                ).Where(c => Matches(model.Protocol, c)),
             ];
 
             // One entry may use any interface. Two entries for the same model must not both claim
@@ -77,7 +77,7 @@ internal sealed class HidFamily(
             {
                 var slot = slots[i];
                 var candidate = await ResolveAsync(model, slot, units[i], cancellationToken);
-                var channel = new HidChannel(transport, candidate.Path, candidate.ProductId);
+                var channel = new HidChannel(transport, candidate.Path, candidate.ProductId, model.Protocol.ReportKind);
                 sources.Add(
                     new DelegateBatterySource(
                         slot,
@@ -102,6 +102,14 @@ internal sealed class HidFamily(
 
         return sources;
     }
+
+    private static bool Matches(HidProtocol protocol, HidCandidate candidate) =>
+        protocol.ReportKind == HidReportKind.Feature
+        || (
+            candidate.OutputReportLength >= protocol.ReportLength
+            && candidate.UsagePage == protocol.UsagePage
+            && candidate.Usage == protocol.Usage
+        );
 
     // The USB serial identifies a unit. Dongles without one share a parent-instance token in the path
     // (\\?\hid#vid_1532&pid_00b7&mi_00#8&1abcd&0&0000#{guid} -> "8&1abcd") across their interfaces.
@@ -146,7 +154,7 @@ internal sealed class HidFamily(
         {
             try
             {
-                var channel = new HidChannel(transport, candidate.Path, candidate.ProductId);
+                var channel = new HidChannel(transport, candidate.Path, candidate.ProductId, model.Protocol.ReportKind);
                 _ = await model.Protocol.ReadAsync(channel, model.Device, cancellationToken);
                 _resolvedPaths[slot.Id] = candidate.Path;
                 _logger.Information(

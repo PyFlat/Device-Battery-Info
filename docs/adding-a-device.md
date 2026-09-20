@@ -22,7 +22,7 @@ new("Some Wireless Mouse", 0x00AB, 0x00AA),   // dongle, cable
 
 A wireless mouse has one product id for its dongle and another when it is plugged in with the cable
 (Device Manager, hardware ids: `VID_1532&PID_00AB`). Leave the cable one out and the mouse disappears as
-soon as it is wired. Run the hardware test once in each mode to find them and to check that both answer:
+soon as it is wired. Run the hardware tests once in each mode to find them and to check that both answer:
 
 ```
 dotnet test --filter Category=Hardware
@@ -57,10 +57,16 @@ internal sealed class LogitechProtocol() : HidProtocol("Logitech", vendorId: 0x0
 }
 ```
 
-This is an illustration, not a verified Logitech protocol. What each part means:
+`Sources/Logitech/LogitechProtocol.cs` is the real, hardware-verified version of this (HID++ 2.0). What
+each part means:
 
-- `vendorId` is the brand's USB vendor id. `reportLength` is the smallest HID feature report the right
-  interface supports.
+- `vendorId` is the brand's USB vendor id. `reportLength` is the smallest report the right interface
+  supports.
+- Most brands (Razer) exchange **feature reports**, which is the default. Some (Logitech HID++) write an
+  output report and read input reports on a vendor interface instead. For those pass
+  `HidReportKind.InputOutput` and the interface's `usagePage`/`usage` to the base constructor, as
+  `LogitechProtocol` does. The interface listing below shows which one your device has. That device may
+  also send unrelated reports, so `isComplete` must match the answer to your request.
 - `ExchangeAsync` sends your bytes and returns the first response `isComplete` accepts. If none does it
   throws, which is what you want: the plugin keeps the last good value instead of showing garbage.
   Devices sometimes answer with an empty placeholder frame first, so check that the frame really is the
@@ -68,6 +74,11 @@ This is an illustration, not a verified Logitech protocol. What each part means:
 - `ReadAsync` must throw when the device does not answer. The plugin uses the same call to find out
   which HID interface is the right one.
 - For charging, return `new BatteryReading { Percent = .., Status = BatteryStatus.Charging }`.
+
+To see what your device exposes, run `HardwareTests` (`dotnet test --filter Category=Hardware` from
+`tests/DeviceBatteryInfo.Tests`). It lists every HID interface of the supported brands with its report
+sizes and usage page, then reads each supported device the way the plugin does. Add your brand's protocol
+to its `Protocols` list.
 
 `Sources/Razer/RazerProtocol.cs` is a complete real example. Keep the byte layout in small `static`
 methods (`BuildRequest`, `IsCompletedResponse`) so a test can check them without a device.
