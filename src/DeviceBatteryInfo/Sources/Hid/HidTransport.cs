@@ -40,11 +40,13 @@ internal interface IHidTransport
         CancellationToken cancellationToken
     );
 
-    // Reads incoming reports until isComplete accepts one. The device may send unrelated reports first.
+    // Reads incoming reports until isComplete accepts one or the budget runs out. The device may send
+    // unrelated reports first.
     Task<byte[]> ExchangeReportsAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
+        TimeSpan budget,
         CancellationToken cancellationToken
     );
 }
@@ -170,12 +172,12 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         );
 
     private const int ReportReadTimeoutMs = 250;
-    private static readonly TimeSpan ReportExchangeBudget = TimeSpan.FromMilliseconds(1500);
 
     public async Task<byte[]> ExchangeReportsAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
+        TimeSpan budget,
         CancellationToken cancellationToken
     )
     {
@@ -202,7 +204,7 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
                 stream.Write(output);
 
                 var clock = Stopwatch.StartNew();
-                while (clock.Elapsed < ReportExchangeBudget)
+                while (clock.Elapsed < budget)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
@@ -229,7 +231,7 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
                 }
 
                 throw new InvalidOperationException(
-                    $"HID report exchange on {devicePath} was not answered within {ReportExchangeBudget.TotalMilliseconds} ms."
+                    $"HID report exchange on {devicePath} was not answered within {budget.TotalMilliseconds} ms."
                 );
             },
             cancellationToken

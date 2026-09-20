@@ -51,6 +51,7 @@ public sealed class HidProtocolTests
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
+            TimeSpan budget,
             CancellationToken cancellationToken
         ) => throw new NotSupportedException();
 
@@ -131,6 +132,7 @@ public sealed class HidProtocolTests
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
+            TimeSpan budget,
             CancellationToken cancellationToken
         ) => throw new NotSupportedException();
 

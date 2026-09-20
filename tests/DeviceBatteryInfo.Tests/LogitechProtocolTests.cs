@@ -100,6 +100,7 @@ public sealed class LogitechProtocolTests
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
+            TimeSpan budget,
             CancellationToken cancellationToken
         )
         {
