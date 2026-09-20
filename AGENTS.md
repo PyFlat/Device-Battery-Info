@@ -207,10 +207,12 @@ Design knowledge that is not obvious from the code alone:
   `resp[1]` not `0x02`, command echo `resp[7..8]` absent, payload zeroed) while it is still talking to
   the mouse; `resp[10]` there is `0`, so trusting it without checking for a completed frame first would
   surface as a spurious 0% reading every few minutes. `RazerProtocol.IsCompletedResponse` gates on
-  status + command echo, and `HidSharpTransport.ExchangeAsync` re-issues the exchange (up to
-  `MaxQueryAttempts`) until the predicate holds, then throws so the poll loop keeps the last good value
-  instead of publishing the 0. `FindCandidates` orders by interface ascending; `HidFamily` probes
-  each once and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
+  status + command echo, and `HidSharpTransport.ExchangeAsync` re-issues the exchange (a short, growing settle delay
+  and a jittered retry delay, so it does not stay in lockstep with a foreign poller such as vendor software)
+  until the predicate holds or the budget runs out (`HidChannel.ReadBudget`, 2 s), then throws so the poll
+  loop keeps the last good value instead of publishing the 0. `FindCandidates` orders by interface
+  ascending; `HidFamily` probes each once with the shorter `HidChannel.ProbeBudget`, so a silent
+  interface cannot stall the poll, and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
   `HidDeviceInfo` lists both (`FindCandidates` runs once per id) and `HidChannel.ProductId` says which is
   in use. When a read fails `HidFamily` forgets the remembered interface, so the next poll probes again
   and picks up a dongle-to-cable switch; without that, an unplugged-from-radio mouse whose dongle is

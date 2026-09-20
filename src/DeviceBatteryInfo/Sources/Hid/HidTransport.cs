@@ -31,11 +31,12 @@ internal interface IHidTransport
 
     IReadOnlyList<HidCandidate> ListFeatureReportDevices();
 
-    // Retries until isComplete accepts the response, then throws.
+    // Retries until isComplete accepts the response or the budget runs out, then throws.
     Task<byte[]> ExchangeAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
+        TimeSpan budget,
         CancellationToken cancellationToken
     );
 
@@ -50,12 +51,13 @@ internal interface IHidTransport
 
 internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
 {
-    private static readonly TimeSpan SettleDelay = TimeSpan.FromMilliseconds(50);
+    // Keep the SetFeature/GetFeature window tight so a foreign poller's answer cannot land in it.
+    private static readonly TimeSpan FirstSettleDelay = TimeSpan.FromMilliseconds(3);
+    private static readonly TimeSpan MaxSettleDelay = TimeSpan.FromMilliseconds(50);
 
-    // A dongle answers with a not-yet-ready placeholder frame while it still talks to its device.
-    // Retry a few times so one such frame does not surface as a bad reading.
-    private const int MaxQueryAttempts = 4;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(40);
+    // Jittered, so retries do not stay in lockstep with a placeholder frame or a foreign poller.
+    private static readonly TimeSpan MinRetryDelay = TimeSpan.FromMilliseconds(20);
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromMilliseconds(120);
 
     private readonly ILogger _logger = logger.ForContext<HidSharpTransport>();
 
@@ -91,6 +93,7 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
+        TimeSpan budget,
         CancellationToken cancellationToken
     )
     {
@@ -116,11 +119,12 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
 
         using var handle = NativeHid.Open(devicePath);
 
-        for (var attempt = 1; attempt <= MaxQueryAttempts; attempt++)
+        var clock = Stopwatch.StartNew();
+        for (var attempt = 1; ; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             NativeHid.SetFeature(handle, buffer);
-            await Task.Delay(SettleDelay, cancellationToken);
+            await Task.Delay(SettleDelay(attempt), cancellationToken);
 
             var response = new byte[reportLength];
             NativeHid.GetFeature(handle, response);
@@ -130,19 +134,40 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
             }
 
             _logger.Debug(
-                "HID feature-report exchange on {Path} not ready, attempt {Attempt}/{Max}: {Response}",
+                "HID feature-report exchange on {Path} not ready, attempt {Attempt}: {Response}",
                 devicePath,
                 attempt,
-                MaxQueryAttempts,
                 Convert.ToHexString(response)
             );
-            await Task.Delay(RetryDelay, cancellationToken);
-        }
 
-        throw new InvalidOperationException(
-            $"HID feature-report exchange on {devicePath} did not complete after {MaxQueryAttempts} attempts."
-        );
+            if (clock.Elapsed >= budget)
+            {
+                throw new InvalidOperationException(
+                    $"HID feature-report exchange on {devicePath} did not complete within "
+                        + $"{budget.TotalMilliseconds} ms ({attempt} attempts). Vendor software polling the "
+                        + "same device can keep answering in its place."
+                );
+            }
+
+            await Task.Delay(NextRetryDelay(), cancellationToken);
+        }
     }
+
+    private static TimeSpan SettleDelay(int attempt) =>
+        TimeSpan.FromMilliseconds(
+            Math.Min(
+                FirstSettleDelay.TotalMilliseconds * Math.Pow(2, Math.Min(attempt - 1, 10)),
+                MaxSettleDelay.TotalMilliseconds
+            )
+        );
+
+    private static TimeSpan NextRetryDelay() =>
+        TimeSpan.FromMilliseconds(
+            Random.Shared.Next(
+                (int)MinRetryDelay.TotalMilliseconds,
+                (int)MaxRetryDelay.TotalMilliseconds
+            )
+        );
 
     private const int ReportReadTimeoutMs = 250;
     private static readonly TimeSpan ReportExchangeBudget = TimeSpan.FromMilliseconds(1500);

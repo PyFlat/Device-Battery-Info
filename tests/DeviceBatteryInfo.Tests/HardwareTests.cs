@@ -60,27 +60,7 @@ public sealed class HardwareTests
     [Test]
     public async Task Reads_every_supported_hid_device_through_the_plugin()
     {
-        var family = new HidFamily(
-            Protocols,
-            new HidSharpTransport(Serilog.Core.Logger.None),
-            Serilog.Core.Logger.None
-        );
-        var devices = new DeviceCatalog();
-        devices.Set(
-            [
-                .. family.Models.Select(model => new BatterySlot(
-                    model.Id,
-                    model.Name,
-                    model.Kind,
-                    DeviceType.Catalog,
-                    CatalogDeviceId: model.Id
-                )),
-            ]
-        );
-
-        var sources = await new DeviceFamilyProvider([family], devices).DiscoverAsync(
-            CancellationToken.None
-        );
+        var (family, sources) = await DiscoverAsync(Protocols);
 
         var read = 0;
         foreach (var model in family.Models)
@@ -106,5 +86,136 @@ public sealed class HardwareTests
         }
 
         Assert.That(read, Is.GreaterThan(0), "No supported HID device answered.");
+    }
+
+    // Stands in for Razer Synapse polling the same control interface.
+    [Test]
+    public async Task Reads_while_a_foreign_poller_hammers_the_same_interface()
+    {
+        var interference = new CancellationTokenSource();
+        var pollers = DeviceList
+            .Local.GetHidDevices(0x1532)
+            .Select(d => HidSharpTransport.Describe(d))
+            .Where(c => c.FeatureReportLength >= 90)
+            .Select(candidate => Task.Run(() => Hammer(candidate, interference.Token)))
+            .ToArray();
+
+        Assume.That(pollers, Is.Not.Empty, "No Razer control interface present.");
+
+        try
+        {
+            var read = 0;
+            var retries = new RetryCounter();
+            var (_, sources) = await DiscoverAsync(
+                [new RazerProtocol()],
+                new Serilog.LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .WriteTo.Sink(retries)
+                    .CreateLogger()
+            );
+            foreach (var source in sources)
+            {
+                try
+                {
+                    var reading = await source.ReadAsync(CancellationToken.None);
+                    HardwareReport.Line(source.Id, $"{reading.Percent}% {reading.Status}");
+                    read++;
+                }
+                catch (Exception exception)
+                {
+                    HardwareReport.Line(source.Id, "read failed: " + exception.Message);
+                }
+            }
+
+            // Zero retries means the poller never collided, so the run proved nothing about the timing.
+            HardwareReport.Line("retries", $"{retries.Count} not-ready responses retried past");
+            Assert.That(read, Is.GreaterThan(0), "No Razer device answered while another poller ran.");
+        }
+        finally
+        {
+            await interference.CancelAsync();
+            await Task.WhenAll(pollers);
+        }
+    }
+
+    // A different command, so its answer is one our own exchange must reject and retry past.
+    private static void Hammer(HidCandidate candidate, CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var report = new byte[90];
+        report[1] = 0x1F;
+        report[5] = 0x16;
+        report[6] = 0x00;
+        report[7] = 0x82;
+        byte checksum = 0;
+        for (var i = 3; i < 88; i++)
+        {
+            checksum ^= report[i];
+        }
+
+        report[88] = checksum;
+
+        var buffer = new byte[candidate.FeatureReportLength];
+        report.CopyTo(buffer, Math.Clamp(candidate.FeatureReportLength - report.Length, 0, 1));
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var handle = NativeHid.Open(candidate.Path);
+                NativeHid.SetFeature(handle, buffer);
+                Thread.Sleep(20);
+                NativeHid.GetFeature(handle, new byte[candidate.FeatureReportLength]);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                Thread.Sleep(20);
+            }
+        }
+    }
+
+    private sealed class RetryCounter : Serilog.Core.ILogEventSink
+    {
+        private int _count;
+
+        public int Count => _count;
+
+        public void Emit(Serilog.Events.LogEvent logEvent)
+        {
+            if (logEvent.MessageTemplate.Text.Contains("not ready", StringComparison.Ordinal))
+            {
+                Interlocked.Increment(ref _count);
+            }
+        }
+    }
+
+    private static async Task<(
+        HidFamily Family,
+        IReadOnlyList<IBatterySource> Sources
+    )> DiscoverAsync(HidProtocol[] protocols, Serilog.ILogger? logger = null)
+    {
+        logger ??= Serilog.Core.Logger.None;
+        var family = new HidFamily(protocols, new HidSharpTransport(logger), logger);
+        var devices = new DeviceCatalog();
+        devices.Set(
+            [
+                .. family.Models.Select(model => new BatterySlot(
+                    model.Id,
+                    model.Name,
+                    model.Kind,
+                    DeviceType.Catalog,
+                    CatalogDeviceId: model.Id
+                )),
+            ]
+        );
+
+        return (
+            family,
+            await new DeviceFamilyProvider([family], devices).DiscoverAsync(CancellationToken.None)
+        );
     }
 }
