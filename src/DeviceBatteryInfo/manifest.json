@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "id": "com.pyflat.device-battery-info",
   "name": "Device Battery Info",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Battery levels for your PC, phone, mouse and Bluetooth devices, with a custom deck widget.",
   "icon": "Assets/icon.svg",
   "entrypoints": {
