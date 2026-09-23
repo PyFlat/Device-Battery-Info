@@ -19,9 +19,11 @@
     "name": "PyFlat"
   },
   "license": "MIT",
-  "permissions": ["host:adb"],
+  "permissions": [
+    "host:adb"
+  ],
   "compatibility": {
-    "macroDeck": ">=3.0.0-beta.7"
+    "macroDeck": ">=3.0.0-beta.12"
   },
   "repository": "https://github.com/PyFlat/Device-Battery-Info"
 }
