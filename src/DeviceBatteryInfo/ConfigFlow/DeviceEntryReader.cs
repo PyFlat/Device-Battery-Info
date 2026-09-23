@@ -73,11 +73,7 @@ internal static class DeviceEntryReader
                         name,
                         BatterySourceKind.Phone,
                         DeviceType.AdbPhone,
-                        AdbAddress: (await Read(DeviceConfigKeys.AdbAddress))?.Trim(),
-                        AdbExecutable: await Read(DeviceConfigKeys.AdbExecutable)
-                            is { Length: > 0 } exe
-                            ? exe
-                            : "adb"
+                        AdbAddress: (await Read(DeviceConfigKeys.AdbAddress))?.Trim()
                     ),
                 }
             );

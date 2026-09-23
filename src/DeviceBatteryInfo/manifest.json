@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "id": "com.pyflat.device-battery-info",
   "name": "Device Battery Info",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Battery levels for your PC, phone, mouse and Bluetooth devices, with a custom deck widget.",
   "icon": "Assets/icon.svg",
   "entrypoints": {
@@ -19,6 +19,7 @@
     "name": "PyFlat"
   },
   "license": "MIT",
+  "permissions": ["host:adb"],
   "compatibility": {
     "macroDeck": ">=3.0.0-beta.7"
   },

@@ -30,7 +30,8 @@ public sealed class HardwareTests
     {
         var discovery = new WindowsDeviceDiscovery(
             new HidSharpTransport(Serilog.Core.Logger.None),
-            new PowerShellPnpBatteryReader()
+            new PowerShellPnpBatteryReader(),
+            new MacroDeck.Plugin.Testing.Fakes.FakeAndroidDeviceManager()
         );
 
         var devices = await discovery.ListBluetoothDevicesAsync(CancellationToken.None);

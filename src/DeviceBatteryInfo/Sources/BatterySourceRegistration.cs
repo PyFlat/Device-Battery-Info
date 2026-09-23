@@ -12,7 +12,6 @@ internal static class BatterySourceRegistration
 {
     public static IServiceCollection AddBatterySources(this IServiceCollection services)
     {
-        services.AddSingleton<IAdbCommandRunner, ProcessAdbCommandRunner>();
         services.AddSingleton<IHidTransport, HidSharpTransport>();
         services.AddSingleton<IPnpBatteryReader, PowerShellPnpBatteryReader>();
         services.AddSingleton<IDeviceDiscovery, WindowsDeviceDiscovery>();

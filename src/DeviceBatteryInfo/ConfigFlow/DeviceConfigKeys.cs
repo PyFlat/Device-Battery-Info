@@ -13,7 +13,7 @@ internal static class DeviceConfigKeys
     public const string CatalogDevice = "catalogDevice";
 
     public const string AdbAddress = "adbAddress";
-    public const string AdbExecutable = "adbExecutable";
+    public const string AdbAddressCustom = "adbAddressCustom";
     public const string BluetoothName = "bluetoothName";
     public const string BluetoothNameCustom = "bluetoothNameCustom";
     public const string BluetoothKind = "bluetoothKind";

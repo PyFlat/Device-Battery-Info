@@ -223,10 +223,28 @@
         <value>How to add a device that is not listed</value>
     </data>
     <data name="ConfigFlow.Device.AdbAddress.Label" xml:space="preserve">
-        <value>adb address (host:port)</value>
+        <value>adb serial or address (host:port)</value>
     </data>
-    <data name="ConfigFlow.Device.AdbExecutable.Label" xml:space="preserve">
-        <value>adb executable</value>
+    <data name="ConfigFlow.Device.AdbAddress.Description" xml:space="preserve">
+        <value>The phone's serial as adb lists it, or host:port for wireless debugging. The plugin uses Macro Deck's own adb connection: turn on Settings &gt; ADB and "Allow plugins to use ADB".</value>
+    </data>
+    <data name="ConfigFlow.Device.AdbAddress.ListDescription" xml:space="preserve">
+        <value>Pick a phone Macro Deck's adb connection sees right now. Not listed? Enter its serial or address manually below.</value>
+    </data>
+    <data name="ConfigFlow.Device.AdbAddress.OptionWithBattery" xml:space="preserve">
+        <value>{model}, {serial} ({percent})</value>
+    </data>
+    <data name="ConfigFlow.Device.AdbAddress.OptionWithoutBattery" xml:space="preserve">
+        <value>{model}, {serial} (no reading yet)</value>
+    </data>
+    <data name="ConfigFlow.Device.AdbAddress.OptionUnauthorized" xml:space="preserve">
+        <value>{model}, {serial} (allow USB debugging on the phone)</value>
+    </data>
+    <data name="ConfigFlow.Device.AdbAddressCustom.Label" xml:space="preserve">
+        <value>Or enter a serial or address manually</value>
+    </data>
+    <data name="ConfigFlow.Device.AdbAddressCustom.Description" xml:space="preserve">
+        <value>Overrides the list above when filled in. Use the serial as adb lists it, or host:port for a phone on wireless debugging that is not connected yet.</value>
     </data>
     <data name="ConfigFlow.Device.BluetoothName.Label" xml:space="preserve">
         <value>Windows device name</value>

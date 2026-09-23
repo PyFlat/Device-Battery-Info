@@ -40,7 +40,7 @@ These work with whatever hardware of that kind you have.
 | Source                         | How it reads                        | Percent | Charging |
 | ------------------------------ | ----------------------------------- | ------- | -------- |
 | This PC / laptop               | Win32 `GetSystemPowerStatus`        | yes     | yes      |
-| Android phone                  | `adb shell dumpsys battery`         | yes     | yes      |
+| Android phone                  | Macro Deck's own adb connection     | yes     | yes      |
 | Windows Bluetooth audio device | PnP battery property via PowerShell | yes     | rarely   |
 
 ### Specific devices ("Other devices")
@@ -80,9 +80,16 @@ Devices are managed inside Macro Deck through the plugin's config flow. Add one 
 1. Pick a category: **This PC**, **Android phone** (over adb), **Windows Bluetooth device** or
    **Other devices**.
 2. Fill in the one thing that category needs, from a list where it can be discovered: a device name
-   for Bluetooth, an address for adb. For **Other devices**, pick a brand and a model from the
-   catalog; nothing more is needed, the plugin already knows how to reach it.
+   for Bluetooth, a phone for adb (each list shows the device's current battery level). For
+   **Other devices**, pick a brand and a model from the catalog; nothing more is needed, the plugin already knows how to reach it.
 3. Name the device.
+
+An Android phone is read through Macro Deck's own adb connection, so there is no adb to install or
+point the plugin at. Turn on **Settings > ADB** and **Allow plugins to use ADB** in Macro Deck; until
+then the phone list stays empty and the phone reads as unavailable. The list shows every phone Macro
+Deck's adb sees; one marked as needing authorization needs the USB debugging prompt accepted on the
+phone. A phone that is not attached yet can be entered by hand: a USB phone by its serial, a wireless
+one by `host:port`, which the plugin connects to on its own (Android 11+ needs the phone paired first).
 
 Editing an existing entry pre-fills its fields. There is no default device: a fresh install shows
 nothing until you add one, and the widgets say so until then.

@@ -17,20 +17,53 @@ public sealed class DeviceConfigFlowTests
 
     private sealed class FakeDiscovery(
         IReadOnlyList<BluetoothDeviceCandidate>? bluetooth = null,
-        IReadOnlyList<DiscoveredHidDevice>? hid = null
+        IReadOnlyList<DiscoveredHidDevice>? hid = null,
+        IReadOnlyList<AndroidDeviceCandidate>? android = null
     ) : IDeviceDiscovery
     {
         public Task<IReadOnlyList<BluetoothDeviceCandidate>> ListBluetoothDevicesAsync(
             CancellationToken cancellationToken
         ) => Task.FromResult(bluetooth ?? []);
 
+        public Task<IReadOnlyList<AndroidDeviceCandidate>> ListAndroidDevicesAsync(
+            CancellationToken cancellationToken
+        ) => Task.FromResult(android ?? []);
+
         public Task<IReadOnlyList<DiscoveredHidDevice>> ListHidDevicesAsync(
             CancellationToken cancellationToken
         ) => Task.FromResult(hid ?? []);
     }
 
-    private static DeviceConfigFlow Flow(IReadOnlyList<BatterySlot>? current = null) =>
-        new(new FakeDiscovery(), TestModels.Catalog(), current ?? [], Serilog.Core.Logger.None);
+    private static DeviceConfigFlow Flow(
+        IReadOnlyList<BatterySlot>? current = null,
+        FakeDiscovery? discovery = null
+    ) =>
+        new(
+            discovery ?? new FakeDiscovery(),
+            TestModels.Catalog(),
+            current ?? [],
+            Serilog.Core.Logger.None
+        );
+
+    private static FakeDiscovery TwoPhones() =>
+        new(
+            android:
+            [
+                new AndroidDeviceCandidate("R58M123", "SM-G991B", 87, NeedsAuthorization: false),
+                new AndroidDeviceCandidate("9A1B2C", "Pixel 8", null, NeedsAuthorization: true),
+            ]
+        );
+
+    private static async Task<ConfigFlowResult> PhoneDetailsStepAsync(DeviceConfigFlow flow)
+    {
+        await flow.StartAsync(new FakeContext(), CancellationToken.None);
+        return await flow.SubmitAsync(
+            "basics",
+            new Dictionary<string, object?> { ["name"] = "My Phone", ["category"] = "adb-phone" },
+            new FakeContext(),
+            CancellationToken.None
+        );
+    }
 
     // Drives start, basics, other and details on one flow instance, the way the host does.
     private static async Task<ConfigFlowResult> RunAsync(
@@ -311,7 +344,7 @@ public sealed class DeviceConfigFlowTests
             Assert.That(result.EntryTitle, Is.EqualTo("My Phone"));
             Assert.That(result.Values!["type"].Value, Is.EqualTo("adb-phone"));
             Assert.That(result.Values!["adbAddress"].Value, Is.EqualTo("1.2.3.4:5555"));
-            Assert.That(result.Values!["adbExecutable"].Value, Is.EqualTo("adb"));
+            Assert.That(result.Values!.Keys, Does.Not.Contain("adbExecutable"));
             Assert.That(result.Values!.Keys, Does.Not.Contain("bluetoothName"));
         }
         Assert.That(result.Values!.Keys, Does.Not.Contain("razerDevice"));
@@ -404,6 +437,62 @@ public sealed class DeviceConfigFlowTests
             Assert.That(result.Kind, Is.EqualTo(ConfigFlowResultKind.Error));
             Assert.That(result.NextStep!.StepId, Is.EqualTo("details"));
             Assert.That(result.FieldErrors, Does.ContainKey("adbAddress"));
+        }
+    }
+
+    [Test]
+    public async Task The_phone_step_lists_attached_phones_with_their_battery()
+    {
+        var result = await PhoneDetailsStepAsync(Flow(discovery: TwoPhones()));
+
+        var field = result.NextStep!.Fields.Single(f => f.Name == "adbAddress");
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(field.Options!.Select(o => o.Value), Is.EqualTo(new[] { "R58M123", "9A1B2C" }));
+            Assert.That(field.DefaultValue, Is.EqualTo("R58M123"));
+            Assert.That(
+                result.NextStep!.AdvancedFields.Select(f => f.Name),
+                Does.Contain("adbAddressCustom")
+            );
+        }
+    }
+
+    [Test]
+    public async Task The_phone_step_falls_back_to_a_text_field_when_no_phone_is_attached()
+    {
+        var result = await PhoneDetailsStepAsync(Flow());
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(
+                result.NextStep!.Fields.Single(f => f.Name == "adbAddress").Options,
+                Is.Null.Or.Empty
+            );
+            Assert.That(
+                result.NextStep!.AdvancedFields.Select(f => f.Name),
+                Does.Not.Contain("adbAddressCustom")
+            );
+        }
+    }
+
+    [Test]
+    public async Task A_manually_entered_phone_address_overrides_the_picked_one()
+    {
+        var result = await RunAsync(
+            Flow(discovery: TwoPhones()),
+            basics: new() { ["name"] = "My Phone", ["category"] = "adb-phone" },
+            details: new()
+            {
+                ["adbAddress"] = "R58M123",
+                ["adbAddressCustom"] = " 192.168.1.20:5555 ",
+            }
+        );
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.Kind, Is.EqualTo(ConfigFlowResultKind.Complete));
+            Assert.That(result.Values!["adbAddress"].Value, Is.EqualTo("192.168.1.20:5555"));
+            Assert.That(result.Values!.Keys, Does.Not.Contain("adbAddressCustom"));
         }
     }
 

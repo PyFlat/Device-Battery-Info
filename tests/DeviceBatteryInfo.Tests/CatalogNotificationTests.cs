@@ -92,6 +92,10 @@ public sealed class CatalogNotificationTests
             CancellationToken cancellationToken
         ) => Task.FromResult<IReadOnlyList<BluetoothDeviceCandidate>>([]);
 
+        public Task<IReadOnlyList<AndroidDeviceCandidate>> ListAndroidDevicesAsync(
+            CancellationToken cancellationToken
+        ) => Task.FromResult<IReadOnlyList<AndroidDeviceCandidate>>([]);
+
         public Task<IReadOnlyList<DiscoveredHidDevice>> ListHidDevicesAsync(
             CancellationToken cancellationToken
         ) => Task.FromResult<IReadOnlyList<DiscoveredHidDevice>>([]);

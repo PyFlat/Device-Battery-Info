@@ -29,13 +29,14 @@ src/DeviceBatteryInfo/
                            a category, "Other devices" adds a brand/model step; a backend that still
                            needs an address or a device name (adb, Bluetooth) then gets a details
                            step, a catalog model completes straight from the model step; async, enumerates
-                           Bluetooth + pre-fills on edit), DeviceModelCatalog (brand -> model, collected
+                           Bluetooth and Android phones + pre-fills on edit), DeviceModelCatalog (brand -> model, collected
                            from the registered device families, for the "Other devices" step),
                            DeviceEntryReader (entries -> BatterySlot[]),
                            DeviceConfigKeys, WindowsDeviceDiscovery
   Core/DeviceCatalog.cs    the live device set: seeded from BatteryPluginOptions, replaced from config
                            entries
-  Core/IDeviceDiscovery.cs public: lists present Bluetooth devices for the config-flow picker (HID
+  Core/IDeviceDiscovery.cs public: lists present Bluetooth devices and attached Android phones for the
+                           config-flow pickers (HID
                            enumeration is kept for a future "scan for supported devices" step)
   Ui/                      widget rendering: BatteryWidgetView (deck tree), BatteryWidgetConfigView
                            (config form), UiViewSession (UiView -> IUiSession adapter),
@@ -174,6 +175,19 @@ Design knowledge that is not obvious from the code alone:
   hashtables), only `{{...}}` interpolates a C# value, which is what makes it readable as actual
   multi-line PowerShell with real variable names instead of an escaped, concatenated one-liner. Keep
   writing new embedded PowerShell here the same way.
+- **The Android phone goes through Macro Deck's adb, never a spawned `adb`.** `AdbBatterySource` uses
+  the host's `IAndroidDeviceManager` (DI-provided, gated by the manifest's `host:adb` permission) and
+  its `GetBatteryStateAsync`, so there is no process runner, no `dumpsys` parser and no executable
+  setting any more; an old entry's `adbExecutable` key is ignored. `Access` other than `Available`
+  means the user has not enabled ADB for plugins, and the source throws so the poll loop logs it once
+  and keeps the last value. The address is a serial or `host:port`; only the latter is passed to
+  `ConnectAsync`, because a USB serial cannot be connected to. The host allows 4 concurrent adb calls
+  per plugin and refuses the fifth with `RateLimited`, which matters if more phones are added than
+  that. The config flow's phone picker (`WindowsDeviceDiscovery.ListAndroidDevicesAsync`) reads each
+  attached phone's battery one at a time for the same reason, and shares `DeviceConfigFlow.PickerField`
+  with the Bluetooth picker: a list when something is attached, a text field when nothing is or an
+  existing entry is being edited, plus a manual override field. Tests use `FakeAndroidDeviceManager`
+  from `MacroDeck.Plugin.Testing`.
 - **A device is a model in a device family, and a family is one file.** `IDeviceFamily` (in
   `Sources/DeviceFamily.cs`) is a protocol plus its `DeviceModel`s. A new model in an existing family is
   one line in that family's `Devices`/`Models`; a new protocol is one class: a `HidProtocol` for a USB

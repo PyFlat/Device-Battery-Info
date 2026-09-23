@@ -156,7 +156,7 @@ internal sealed class DeviceConfigFlow(
 
         switch (type)
         {
-            case DeviceType.AdbPhone when Draft(DeviceConfigKeys.AdbAddress) is not { Length: > 0 }:
+            case DeviceType.AdbPhone when ResolvedAdbAddress() is not { Length: > 0 }:
                 errors[DeviceConfigKeys.AdbAddress] = MacroDeckStrings.Validation.Required(
                     Strings.ConfigFlow.Device.AdbAddress.Label()
                 );
@@ -190,10 +190,7 @@ internal sealed class DeviceConfigFlow(
 
             case DeviceType.AdbPhone:
                 values[DeviceConfigKeys.AdbAddress] = ConfigFlowValue.Plain(
-                    Draft(DeviceConfigKeys.AdbAddress)
-                );
-                values[DeviceConfigKeys.AdbExecutable] = ConfigFlowValue.Plain(
-                    Draft(DeviceConfigKeys.AdbExecutable) ?? "adb"
+                    ResolvedAdbAddress()
                 );
                 break;
 
@@ -350,35 +347,66 @@ internal sealed class DeviceConfigFlow(
         switch (type)
         {
             case DeviceType.AdbPhone:
+            {
+                var phones = await DiscoverAsync(
+                    discovery.ListAndroidDevicesAsync,
+                    "Android",
+                    cancellationToken
+                );
+                var options = phones.Select(AdbAddressOption).ToArray();
                 fields.Add(
-                    ActionParameter.Text(
+                    PickerField(
                         DeviceConfigKeys.AdbAddress,
-                        label: Strings.ConfigFlow.Device.AdbAddress.Label(),
-                        placeholder: "192.168.1.42:5555",
-                        defaultValue: Draft(DeviceConfigKeys.AdbAddress),
-                        required: true
+                        options,
+                        Strings.ConfigFlow.Device.AdbAddress.Label(),
+                        Strings.ConfigFlow.Device.AdbAddress.Description(),
+                        Strings.ConfigFlow.Device.AdbAddress.ListDescription(),
+                        placeholder: "192.168.1.42:5555"
                     )
                 );
-                advanced.Add(
-                    ActionParameter.Text(
-                        DeviceConfigKeys.AdbExecutable,
-                        label: Strings.ConfigFlow.Device.AdbExecutable.Label(),
-                        defaultValue: Draft(DeviceConfigKeys.AdbExecutable) ?? "adb"
-                    )
-                );
+                if (options.Length > 0 && Draft(DeviceConfigKeys.AdbAddress) is not { Length: > 0 })
+                {
+                    advanced.Add(
+                        CustomField(
+                            DeviceConfigKeys.AdbAddressCustom,
+                            Strings.ConfigFlow.Device.AdbAddressCustom.Label(),
+                            Strings.ConfigFlow.Device.AdbAddressCustom.Description()
+                        )
+                    );
+                }
+
                 break;
+            }
 
             case DeviceType.Bluetooth:
             {
-                var bluetoothDevices = await ListBluetoothDevicesAsync(cancellationToken);
+                var bluetoothDevices = await DiscoverAsync(
+                    discovery.ListBluetoothDevicesAsync,
+                    "Bluetooth",
+                    cancellationToken
+                );
                 var options = bluetoothDevices.Select(BluetoothNameOption).ToArray();
-                fields.Add(BluetoothNameField(options));
+                fields.Add(
+                    PickerField(
+                        DeviceConfigKeys.BluetoothName,
+                        options,
+                        Strings.ConfigFlow.Device.BluetoothName.Label(),
+                        Strings.ConfigFlow.Device.BluetoothName.Description(),
+                        Strings.ConfigFlow.Device.BluetoothName.ListDescription()
+                    )
+                );
                 if (
                     options.Length > 0
                     && Draft(DeviceConfigKeys.BluetoothName) is not { Length: > 0 }
                 )
                 {
-                    advanced.Add(BluetoothNameCustomField());
+                    advanced.Add(
+                        CustomField(
+                            DeviceConfigKeys.BluetoothNameCustom,
+                            Strings.ConfigFlow.Device.BluetoothNameCustom.Label(),
+                            Strings.ConfigFlow.Device.BluetoothNameCustom.Description()
+                        )
+                    );
                 }
 
                 fields.Add(
@@ -419,47 +447,80 @@ internal sealed class DeviceConfigFlow(
                 : Strings.ConfigFlow.Device.BluetoothName.OptionWithoutBattery(device.Name),
         };
 
-    private ActionParameter BluetoothNameCustomField() =>
-        ActionParameter.Text(
-            DeviceConfigKeys.BluetoothNameCustom,
-            label: Strings.ConfigFlow.Device.BluetoothNameCustom.Label(),
-            description: Strings.ConfigFlow.Device.BluetoothNameCustom.Description(),
-            defaultValue: Draft(DeviceConfigKeys.BluetoothNameCustom)
-        );
+    private static ActionParameterOption AdbAddressOption(AndroidDeviceCandidate phone) =>
+        new()
+        {
+            Value = phone.Serial,
+            Label = phone switch
+            {
+                { NeedsAuthorization: true } =>
+                    Strings.ConfigFlow.Device.AdbAddress.OptionUnauthorized(
+                        phone.Model,
+                        phone.Serial
+                    ),
+                { Percent: { } percent } => Strings.ConfigFlow.Device.AdbAddress.OptionWithBattery(
+                    phone.Model,
+                    phone.Serial,
+                    $"{percent}%"
+                ),
+                _ => Strings.ConfigFlow.Device.AdbAddress.OptionWithoutBattery(
+                    phone.Model,
+                    phone.Serial
+                ),
+            },
+        };
 
     private string? ResolvedBluetoothName() =>
         Draft(DeviceConfigKeys.BluetoothNameCustom) ?? Draft(DeviceConfigKeys.BluetoothName);
 
-    private ActionParameter BluetoothNameField(ActionParameterOption[] options)
+    private string? ResolvedAdbAddress() =>
+        (Draft(DeviceConfigKeys.AdbAddressCustom) ?? Draft(DeviceConfigKeys.AdbAddress))?.Trim();
+
+    // A list of what is connected now, or a text field when nothing was found or an existing
+    // value is being edited (it may belong to a device that is not connected right now).
+    private ActionParameter PickerField(
+        string key,
+        ActionParameterOption[] options,
+        LocalizedText label,
+        LocalizedText textDescription,
+        LocalizedText listDescription,
+        string? placeholder = null
+    )
     {
-        var current = Draft(DeviceConfigKeys.BluetoothName);
+        var current = Draft(key);
 
         if (current is { Length: > 0 } || options.Length == 0)
         {
             return ActionParameter.Text(
-                DeviceConfigKeys.BluetoothName,
-                label: Strings.ConfigFlow.Device.BluetoothName.Label(),
-                description: Strings.ConfigFlow.Device.BluetoothName.Description(),
+                key,
+                label: label,
+                description: textDescription,
+                placeholder: placeholder,
                 defaultValue: current
             );
         }
 
         return ActionParameter.Choice(
-            DeviceConfigKeys.BluetoothName,
+            key,
             options,
-            label: Strings.ConfigFlow.Device.BluetoothName.Label(),
-            description: Strings.ConfigFlow.Device.BluetoothName.ListDescription(),
+            label: label,
+            description: listDescription,
             defaultValue: options[0].Value,
             required: true
         );
     }
+
+    private ActionParameter CustomField(
+        string key,
+        LocalizedText label,
+        LocalizedText description
+    ) => ActionParameter.Text(key, label: label, description: description, defaultValue: Draft(key));
 
     private void SeedDraftFrom(BatterySlot slot)
     {
         _draft[DeviceConfigKeys.Name] = slot.DisplayName;
         _draft[DeviceConfigKeys.Category] = DeviceConfigKeys.TypeToCategory(slot.Type);
         _draft[DeviceConfigKeys.AdbAddress] = slot.AdbAddress;
-        _draft[DeviceConfigKeys.AdbExecutable] = slot.AdbExecutable;
         _draft[DeviceConfigKeys.BluetoothName] = slot.BluetoothFriendlyName;
         if (slot.Type == DeviceType.Bluetooth)
         {
@@ -510,17 +571,16 @@ internal sealed class DeviceConfigFlow(
             : DeviceConfigKeys.CategoryToType(Draft(DeviceConfigKeys.Category))
                 ?? DeviceType.AdbPhone;
 
-    private async Task<IReadOnlyList<BluetoothDeviceCandidate>> ListBluetoothDevicesAsync(
+    private async Task<IReadOnlyList<T>> DiscoverAsync<T>(
+        Func<CancellationToken, Task<IReadOnlyList<T>>> list,
+        string what,
         CancellationToken cancellationToken
     )
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(DiscoveryBudget);
 
-        var work = Guard(
-            () => discovery.ListBluetoothDevicesAsync(cts.Token),
-            Array.Empty<BluetoothDeviceCandidate>()
-        );
+        var work = Guard(() => list(cts.Token), Array.Empty<T>());
         var deadline = Task.Delay(
             DiscoveryBudget + TimeSpan.FromMilliseconds(500),
             CancellationToken.None
@@ -528,7 +588,8 @@ internal sealed class DeviceConfigFlow(
         if (await Task.WhenAny(work, deadline).ConfigureAwait(false) != work)
         {
             logger.Warning(
-                "Bluetooth discovery did not finish within {Budget}s; serving a text field.",
+                "{What} discovery did not finish within {Budget}s; serving a text field.",
+                what,
                 DiscoveryBudget.TotalSeconds
             );
             return [];
