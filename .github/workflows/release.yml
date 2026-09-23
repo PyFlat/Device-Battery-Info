@@ -92,7 +92,7 @@ jobs:
     with:
       version: ${{ needs.release.outputs.tag }}
       source: src/DeviceBatteryInfo
-      cli-version: 3.0.0-beta.11
+      cli-version: 3.0.0-beta.12
       changelog: ${{ needs.release.outputs.changelog }}
       # The release job above already ran the tests on windows-latest
       run-tests: false

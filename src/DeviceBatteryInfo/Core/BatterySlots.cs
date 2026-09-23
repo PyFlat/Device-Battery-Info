@@ -10,7 +10,6 @@ public sealed record BatterySlot(
     DeviceType Type,
     string? BluetoothFriendlyName = null,
     string? AdbAddress = null,
-    string? AdbExecutable = null,
     string? CatalogDeviceId = null
 );
 

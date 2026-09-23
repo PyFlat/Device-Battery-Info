@@ -96,8 +96,7 @@ public sealed class BatteryVariableCatalogTests
                 "Phone",
                 BatterySourceKind.Phone,
                 DeviceType.AdbPhone,
-                AdbAddress: "1.2.3.4:5555",
-                AdbExecutable: "adb"
+                AdbAddress: "1.2.3.4:5555"
             ),
             new BatterySlot(
                 "gaming-headset",

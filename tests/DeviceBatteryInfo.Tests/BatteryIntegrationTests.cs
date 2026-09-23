@@ -210,12 +210,12 @@ public sealed class LocalizationTests
             Assert.That(
                 Strings.LocalizationCatalog.TryGetTemplate(
                     "en",
-                    "ConfigFlow.Device.AdbExecutable.Label",
+                    "ConfigFlow.Device.AdbAddress.Label",
                     out var label
                 ),
                 Is.True
             );
-            Assert.That(label, Is.EqualTo("adb executable"));
+            Assert.That(label, Is.EqualTo("adb serial or address (host:port)"));
         }
     }
 

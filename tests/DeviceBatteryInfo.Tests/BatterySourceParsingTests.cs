@@ -1,28 +1,44 @@
+using DeviceBatteryInfo.ConfigFlow;
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources.Adb;
 using DeviceBatteryInfo.Sources.Bluetooth;
 using DeviceBatteryInfo.Sources.Razer;
 using DeviceBatteryInfo.Sources;
 using DeviceBatteryInfo.Sources.SystemBattery;
+using MacroDeck.Plugin.Testing.Fakes;
+using MacroDeck.Sdk.Android;
 using NUnit.Framework;
 
 namespace DeviceBatteryInfo.Tests;
 
 [TestFixture]
-public sealed class AdbBatteryParserTests
+public sealed class AdbBatterySourceTests
 {
-    [Test]
-    public void Parses_level_and_charging_status()
-    {
-        const string dumpsys = """
-            Current Battery Service state:
-              AC powered: true
-              status: 2
-              level: 87
-              scale: 100
-            """;
+    private static AdbBatterySource Source(FakeAndroidDeviceManager android, string address) =>
+        new(
+            android,
+            new BatterySlot(
+                "phone",
+                "Phone",
+                BatterySourceKind.Phone,
+                DeviceType.AdbPhone,
+                AdbAddress: address
+            )
+        );
 
-        var reading = AdbBatteryParser.Parse(dumpsys);
+    [Test]
+    public async Task Reads_level_and_charging_status_from_an_attached_device()
+    {
+        var android = new FakeAndroidDeviceManager();
+        var phone = android.AddDevice("R58M123");
+        phone.Battery = new AndroidBatteryState
+        {
+            Level = 87,
+            IsCharging = true,
+            Status = AndroidBatteryStatus.Charging,
+        };
+
+        var reading = await Source(android, "R58M123").ReadAsync(CancellationToken.None);
 
         using (Assert.EnterMultipleScope())
         {
@@ -31,22 +47,102 @@ public sealed class AdbBatteryParserTests
         }
     }
 
-    [Test]
-    public void Rescales_when_scale_is_not_a_hundred()
+    [TestCase(AndroidBatteryStatus.Discharging, false, BatteryStatus.Discharging)]
+    [TestCase(AndroidBatteryStatus.NotCharging, false, BatteryStatus.Discharging)]
+    [TestCase(AndroidBatteryStatus.Full, true, BatteryStatus.Full)]
+    [TestCase(AndroidBatteryStatus.Unknown, true, BatteryStatus.Charging)]
+    [TestCase(AndroidBatteryStatus.Unknown, false, BatteryStatus.Unknown)]
+    public void Maps_the_android_status(
+        AndroidBatteryStatus status,
+        bool isCharging,
+        BatteryStatus expected
+    )
     {
-        var reading = AdbBatteryParser.Parse("level: 128\nscale: 255\nstatus: 3\n");
+        var reading = AdbBatteryMapper.ToReading(
+            new AndroidBatteryState { Level = 50, IsCharging = isCharging, Status = status }
+        );
 
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(reading.Percent, Is.EqualTo(50));
-            Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Discharging));
-        }
+        Assert.That(reading.Status, Is.EqualTo(expected));
     }
 
     [Test]
-    public void Returns_unavailable_when_no_level_line()
+    public void Fails_when_the_host_does_not_allow_adb()
     {
-        Assert.That(AdbBatteryParser.Parse("status: 2\n"), Is.EqualTo(BatteryReading.Unavailable));
+        var android = new FakeAndroidDeviceManager();
+        android.AddDevice("R58M123");
+        android.SetAccess(AndroidDeviceAccess.AdbNotAllowed);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await Source(android, "R58M123").ReadAsync(CancellationToken.None)
+        );
+    }
+
+    [Test]
+    public void Fails_for_a_usb_serial_that_is_not_attached()
+    {
+        var android = new FakeAndroidDeviceManager();
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await Source(android, "R58M123").ReadAsync(CancellationToken.None)
+        );
+    }
+
+    [Test]
+    public async Task Connects_a_wireless_address_that_is_not_attached_yet()
+    {
+        var android = new FakeAndroidDeviceManager();
+
+        var reading = await Source(android, "192.168.1.20:5555").ReadAsync(CancellationToken.None);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(android.FindDevice("192.168.1.20:5555"), Is.Not.Null);
+            Assert.That(reading.Percent, Is.Not.Null);
+        }
+    }
+}
+
+[TestFixture]
+public sealed class AndroidDeviceDiscoveryTests
+{
+    // Only the Android listing is exercised, so the HID and PnP readers are never touched.
+    private static WindowsDeviceDiscovery Discovery(FakeAndroidDeviceManager android) =>
+        new(null!, null!, android);
+
+    [Test]
+    public async Task Lists_attached_phones_with_their_battery_and_authorization()
+    {
+        var android = new FakeAndroidDeviceManager();
+        var online = android.AddDevice("R58M123", info: new AndroidDeviceInfo("SM-G991B", "samsung", "o1s"));
+        online.Battery = new AndroidBatteryState { Level = 64, Status = AndroidBatteryStatus.Discharging };
+        android.AddDevice("9A1B2C", info: new AndroidDeviceInfo("Pixel 8", "Google", "shiba"));
+        android.SetDeviceState("9A1B2C", AndroidDeviceState.Unauthorized);
+
+        var phones = await Discovery(android).ListAndroidDevicesAsync(CancellationToken.None);
+
+        Assert.That(
+            phones,
+            Is.EquivalentTo(
+                new[]
+                {
+                    new AndroidDeviceCandidate("R58M123", "SM-G991B", 64, NeedsAuthorization: false),
+                    new AndroidDeviceCandidate("9A1B2C", "Pixel 8", null, NeedsAuthorization: true),
+                }
+            )
+        );
+    }
+
+    [Test]
+    public async Task Lists_nothing_while_the_host_does_not_allow_adb()
+    {
+        var android = new FakeAndroidDeviceManager();
+        android.AddDevice("R58M123");
+        android.SetAccess(AndroidDeviceAccess.AdbNotEnabled);
+
+        Assert.That(
+            await Discovery(android).ListAndroidDevicesAsync(CancellationToken.None),
+            Is.Empty
+        );
     }
 }
 
