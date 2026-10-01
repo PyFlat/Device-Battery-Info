@@ -199,4 +199,81 @@ public sealed class HidProtocolTests
         var wired = (await provider.DiscoverAsync(CancellationToken.None)).Single();
         Assert.That((await wired.ReadAsync(CancellationToken.None)).Percent, Is.EqualTo(80));
     }
+
+    private sealed class SlowPushProtocol() : HidProtocol("Acme", vendorId: 0x1234, reportLength: 8)
+    {
+        public static readonly TimeSpan PushInterval = TimeSpan.FromSeconds(4);
+
+        public override IReadOnlyList<HidDeviceInfo> Devices { get; } = [new("Air Mouse", 0x0001)];
+
+        public override TimeSpan? ReadBudget => PushInterval;
+
+        public override async Task<BatteryReading> ReadAsync(
+            HidChannel channel,
+            HidDeviceInfo device,
+            CancellationToken cancellationToken
+        ) => BatteryReading.FromPercent((await channel.ExchangeAsync([], _ => true, cancellationToken))[2]);
+    }
+
+    private sealed class BudgetRecordingTransport : IHidTransport
+    {
+        private static readonly HidCandidate Device = new(@"air", 0x1234, 0x0001, 0, "Air", 8);
+
+        public List<TimeSpan> Budgets { get; } = [];
+
+        public IReadOnlyList<HidCandidate> FindCandidates(
+            int vendorId,
+            int productId,
+            int? interfaceNumber,
+            int minFeatureReportLength
+        ) => productId == 0x0001 ? [Device] : [];
+
+        public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => [Device];
+
+        public Task<byte[]> ExchangeReportsAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
+        public Task<byte[]> ExchangeAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        )
+        {
+            Budgets.Add(budget);
+            return Task.FromResult(new byte[] { 0x00, 0x00, 60 });
+        }
+    }
+
+    [Test]
+    public async Task A_protocol_budget_covers_both_the_probe_and_the_reads()
+    {
+        var devices = new DeviceCatalog();
+        devices.Set(
+            [
+                new BatterySlot(
+                    "air",
+                    "Air",
+                    BatterySourceKind.Mouse,
+                    DeviceType.Catalog,
+                    CatalogDeviceId: "acme-air-mouse"
+                ),
+            ]
+        );
+        var transport = new BudgetRecordingTransport();
+        var family = new HidFamily([new SlowPushProtocol()], transport, Serilog.Core.Logger.None);
+
+        var sources = await new DeviceFamilyProvider([family], devices).DiscoverAsync(
+            CancellationToken.None
+        );
+        await sources.Single().ReadAsync(CancellationToken.None);
+
+        Assert.That(transport.Budgets, Has.Count.EqualTo(2).And.All.EqualTo(SlowPushProtocol.PushInterval));
+    }
 }

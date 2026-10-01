@@ -56,6 +56,10 @@ internal interface IHidTransport
         TimeSpan budget,
         CancellationToken cancellationToken
     );
+
+    // Reads one feature report without writing anything first (unlike ExchangeAsync).
+    Task<byte[]> GetFeatureAsync(string devicePath, byte reportId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
 }
 
 internal sealed partial class HidSharpTransport : IHidTransport
@@ -235,6 +239,27 @@ internal sealed partial class HidSharpTransport : IHidTransport
         }
     }
 
+    public Task<byte[]> GetFeatureAsync(
+        string devicePath,
+        byte reportId,
+        CancellationToken cancellationToken
+    )
+    {
+        var device =
+            DeviceList
+                .Local.GetHidDevices()
+                .FirstOrDefault(d =>
+                    string.Equals(d.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
+                ) ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var report = new byte[device.GetMaxFeatureReportLength()];
+        report[0] = reportId;
+        using var channel = _openFeatureChannel(devicePath);
+        channel.Get(report);
+        return Task.FromResult(report);
+    }
+
     private static TimeSpan SettleDelay(int attempt) =>
         TimeSpan.FromMilliseconds(
             Math.Min(
@@ -289,9 +314,13 @@ internal sealed partial class HidSharpTransport : IHidTransport
                 cancellationToken.ThrowIfCancellationRequested();
                 stream.ReadTimeout = ReportReadTimeoutMs;
 
-                var output = new byte[Math.Max(OutputReportLength(device, request), request.Length)];
-                request.CopyTo(output, 0);
-                stream.Write(output);
+                // An empty request only listens, for a device that pushes its state on its own (Rapoo).
+                if (request.Length > 0)
+                {
+                    var output = new byte[Math.Max(OutputReportLength(device, request), request.Length)];
+                    request.CopyTo(output, 0);
+                    stream.Write(output);
+                }
 
                 var clock = Stopwatch.StartNew();
                 while (clock.Elapsed < budget)

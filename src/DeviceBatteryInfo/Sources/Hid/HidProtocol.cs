@@ -54,6 +54,9 @@ internal sealed class HidChannel(
                 budget ?? ReadBudget,
                 cancellationToken
             );
+
+    public Task<byte[]> GetFeatureAsync(byte reportId, CancellationToken cancellationToken) =>
+        transport.GetFeatureAsync(devicePath, reportId, cancellationToken);
 }
 
 // Subclass it, list the devices and implement ReadAsync. Finding the device is done for you.
@@ -79,6 +82,10 @@ internal abstract class HidProtocol(
     public int? UsagePage { get; } = usagePage;
 
     public int? Usage { get; } = usage;
+
+    // How long one read (and the interface probe) may wait. Override for a device that only reports
+    // on its own schedule, slower than the default budgets.
+    public virtual TimeSpan? ReadBudget => null;
 
     public abstract IReadOnlyList<HidDeviceInfo> Devices { get; }
 

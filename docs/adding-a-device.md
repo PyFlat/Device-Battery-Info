@@ -74,7 +74,15 @@ Logitech device is a feature id, a function and a parser. What each part means:
   answer to your request (Razer checks a status byte and the echoed command).
 - `ReadAsync` must throw when the device does not answer. The plugin uses the same call to find out
   which HID interface is the right one.
-- For charging, return `new BatteryReading { Percent = .., Status = BatteryStatus.Charging }`.
+- For charging, return `new BatteryReading { Percent = .., Status = BatteryStatus.Charging }`. A device
+  that reports charging but no level (Rapoo while charging) leaves `Percent` null.
+- A device that pushes its state on its own (Rapoo) needs no request: pass an empty request (`[]`) with
+  `HidReportKind.InputOutput` and the transport only listens.
+- A device that must be told to send the right report first (a Bluetooth DualSense reads one feature
+  report) can call `channel.GetFeatureAsync(reportId)`, which only reads. Do not reach for
+  `ExchangeAsync` there: it writes the feature before reading it.
+- The probe waits 400 ms and a read 2 s. If the device answers or pushes slower than that, override
+  `ReadBudget` (Rapoo pushes every ~3.2 s and uses 4 s), or the probe never finds the interface.
 
 To see what your device exposes, run `HardwareTests` (`dotnet test --filter Category=Hardware` from
 `tests/DeviceBatteryInfo.Tests`). It lists every HID interface of the supported brands with its report
@@ -111,4 +119,6 @@ pairing name). Those are the three generic backends in the config flow.
 ## Tests
 
 `HidProtocolTests.cs` is the shortest possible protocol test, `HidFamilyTests.cs` shows a fake transport,
-and `BatterySourceParsingTests.cs` tests the Razer byte layout. Then run `dotnet build && dotnet test`.
+and `BatterySourceParsingTests.cs` tests the Razer byte layout. A new brand gets its own
+`<Brand>ProtocolTests.cs` built from frames captured on the real device (`CorsairProtocolTests.cs`,
+`RapooProtocolTests.cs`, `AulaProtocolTests.cs`, `SonyProtocolTests.cs`). Then run `dotnet build && dotnet test`.

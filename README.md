@@ -58,13 +58,17 @@ A catalog of individual products that someone has implemented and tested against
 only lists exactly what is confirmed to work, never a whole brand or category, so a model that is not
 listed here is not supported even if it shares a brand or protocol with one that is.
 
-| Brand    | Model                | Type    | Connection        | Percent | Charging | Notes                                                                                           |
-| -------- | -------------------- | ------- | ----------------- | ------- | -------- | ----------------------------------------------------------------------------------------------- |
-| Razer    | DeathAdder V3 Pro    | Mouse   | Dongle or cable   | yes     | yes      |                                                                                                 |
-| Razer    | Basilisk V3 Pro      | Mouse   | Dongle or cable   | yes     | yes      |                                                                                                 |
-| Razer    | Viper V2 Pro         | Mouse   | Dongle or cable   | yes     | yes      |                                                                                                 |
-| Logitech | G Pro X Superlight 2 | Mouse   | Receiver or cable | yes     | yes      |                                                                                                 |
-| Logitech | G Pro X Wireless     | Headset | Dongle            | approx. | yes      | Reports a voltage, so the percentage is an estimate. It reads nothing while the headset is off. |
+| Brand    | Model                | Type       | Connection        | Percent   | Charging | Notes                                                                                            |
+| -------- | -------------------- | ---------- | ----------------- | --------- | -------- | ------------------------------------------------------------------------------------------------ |
+| Razer    | DeathAdder V3 Pro    | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
+| Razer    | Basilisk V3 Pro      | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
+| Razer    | Viper V2 Pro         | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
+| Logitech | G Pro X Superlight 2 | Mouse      | Receiver or cable | yes       | yes      |                                                                                                  |
+| Logitech | G Pro X Wireless     | Headset    | Dongle            | approx.   | yes      | Reports a voltage, so the percentage is an estimate. It reads nothing while the headset is off.  |
+| Corsair  | VOID PRO Wireless    | Headset    | Dongle            | yes       | yes      | It reads nothing while the headset is off.                                                       |
+| Rapoo    | VT3 PRO              | Mouse      | Dongle or cable   | yes       | yes      | On the cable it reports only now and then, so the reading may go stale. No level while charging. |
+| AULA     | F75                  | Keyboard   | 2.4G receiver     | yes       | yes      | No level while the cable is in, only that it charges. Not read in wired mode.                    |
+| Sony     | DualSense            | Controller | USB or Bluetooth  | 10% steps | yes      | The controller reports its level in steps of 10%.                                                |
 
 The exact list is always the "Other devices" step of the config flow, which is built from the same
 code. If this table and the flow ever disagree, the flow is right; please fix the table.

@@ -3,9 +3,13 @@ using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources;
 using DeviceBatteryInfo.Sources.Bluetooth;
 using DeviceBatteryInfo.Sources.Hid;
+using DeviceBatteryInfo.Sources.Aula;
+using DeviceBatteryInfo.Sources.Corsair;
 using DeviceBatteryInfo.Sources.Logitech;
+using DeviceBatteryInfo.Sources.Rapoo;
 using DeviceBatteryInfo.Sources.Razer;
 using DeviceBatteryInfo.Sources.SystemBattery;
+using DeviceBatteryInfo.Sources.Sony;
 using HidSharp;
 using NUnit.Framework;
 
@@ -21,6 +25,10 @@ public sealed class HardwareTests
         new RazerProtocol(),
         new LogitechProtocol(),
         new LogitechHeadsetProtocol(),
+        new CorsairProtocol(),
+        new RapooProtocol(),
+        new AulaProtocol(),
+        new SonyProtocol(),
     ];
 
     [SetUp]
