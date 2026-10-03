@@ -255,53 +255,7 @@ Design knowledge that is not obvious from the code alone:
   interpolated; that curve is an estimate, so treat the percentage as approximate and never as a value
   to calibrate other code against. A powered-off headset reads far below the curve, which is why
   `ParseVoltage` throws there instead of publishing 0%. Ask the device for its feature table
-  (`0x0001` getCount + getFeatureId) before assuming a feature index. `Sources/Corsair/CorsairProtocol.cs`
-  covers the VOID PRO Wireless headset: output report `C9 64` on the vendor interface
-  `FFC5:0001` (`HidReportKind.InputOutput`), answered by input report `0x64` with the level in byte 2
-  (bit `0x80` is set while the mic boom is raised/muted, verified by toggling it; masked off) and the
-  state in byte 4 (1 connected, 2 low, 4 full, 5 charging, 0 headset off - `ParseBattery` throws there
-  instead of publishing 0%). The layout comes from HeadsetControl and a Node tray app. Verified on a
-  VOID PRO Wireless `0A75` (dongle, interface 3: `FFC5:0001` is in 5 / out 20): discharging and
-  charging both read with a level, off answers state 0, and full on the cable answers state 4 with the
-  level still at 96.
-- **Rapoo and AULA were mapped on real hardware, not from a spec.** `Sources/Rapoo/RapooProtocol.cs`
-  (VT3 PRO, dongle `1215`, cable `4415`) sends nothing: the mouse pushes `BB B0 51 E8 03 <state>
-  <level>` about every 3.2 s on the `FF00:0002` collection with 7-byte reports (a sibling `FF00:0002`
-  with 10-byte reports stays silent). State 1 is on battery, 2 charging; on current firmware a
-  charging mouse sends level `0x7F`, which reads as Charging with no percent. There is no full state:
-  a full mouse on the cable sends state 2 with level 100, read as Full. **On the cable the pushes are
-  irregular** (3 s bursts, then 30-60 s of silence, while the mouse is in use), so a 4 s read and the
-  probe often miss them: the probe then falls back to the silent dongle collection and the reading
-  goes stale. Accepted as a known limitation; the fix would be a background listener caching the last
-  report per path, instead of listening per poll. Over the dongle the push is a steady 3.2 s. It is the one protocol
-  that listens only, so `ExchangeReportsAsync` skips the write for an empty request, and it overrides
-  `HidProtocol.ReadBudget` (4 s), because the 400 ms probe and 2 s read budgets are shorter than the
-  push interval. A switched-off mouse is silent, so the read times out. PID `1215` is not the VT3 PRO
-  id that the open-source Rapoo tools document (`1231`, `14A5`), and their report layouts do not
-  apply to it. `Sources/Aula/AulaProtocol.cs` (F75 on the Compx receiver `3554:FA09`) sends the
-  battery-hub / womier-l65-linux frame on `FF02:0002`: report `0x13`, command `0x4A`, 20 bytes, and
-  the last byte is the byte sum of the rest. The reply has the level in byte 5 and the state in byte 6
-  (`0x01` on battery, `0x10` with the cable in). With the cable in the level always reads 100, even at
-  a real 97%, so that reads as Charging with no percent (charging and full cannot be told apart). The receiver also pushes
-  unsolicited `0x13 0A` frames, so a reply must match the command and the checksum. In wired mode the
-  keyboard enumerates as a separate Sinowealth device (`258A:010C`), with an unknown protocol, and is
-  not read. Command `0x44` returns a 10-frame configuration dump (probably lighting) that is not
-  mapped. The 8BitDo Ultimate (`2DC8:3106`) is deliberately absent: its dongle presents an
-  XInput *wired* pad (`WIRED`/`FULL`) and has no vendor collection, so no battery reaches the PC.
-- **The DualSense needs one feature read over Bluetooth.** `Sources/Sony/SonyProtocol.cs` (`054C:0CE6`,
-  gamepad collection `0001:0005`) only listens, like Rapoo; the controller streams hundreds of
-  reports a second, so the default budgets suffice. The status byte (layout from Linux
-  hid-playstation) is byte 53 of the 64-byte USB report `0x01`, or byte 54 of the 78-byte Bluetooth
-  report `0x31`: the low nibble is the level in tenths (shown as level x 10, which matches what
-  the user sees elsewhere, not hid-playstation's x 10 + 5), the high nibble 0 discharging, 1
-  charging, 2 full. A fresh Bluetooth link sends only a short `0x01` report with no battery;
-  reading feature `0x05` (calibration) switches it to `0x31` until it disconnects. Verified on
-  real hardware by reconnecting the controller: only `0x01` before, `0x31` right after the read.
-  Nothing on this Windows (GameInput, Edge) did that switch on its own. That read goes through
-  `IHidTransport.GetFeatureAsync`, which only reads; `ExchangeAsync` always writes a feature first,
-  and writing `0x05` is something no reference implementation does. Lightbar, player LEDs, rumble
-  and adaptive triggers live in output report `0x02` (USB) and are not used.
-  `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
+  (`0x0001` getCount + getFeatureId) before assuming a feature index. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
   and checksum. **Only the DeathAdder V3 Pro has been tested on real hardware.** The command class
   (0x07, "power") and ids are plausibly shared across Razer mice, but a mouse is added to
   `RazerProtocol.Devices` only after its battery was read on the device.
@@ -347,6 +301,52 @@ Design knowledge that is not obvious from the code alone:
   config flow never asks for a USB id or an interface. There is no in-UI "custom device" path by
   design (a raw USB id alone cannot drive the Razer HID protocol); an unlisted device is a model in a
   family.
+- **The Corsair VOID headsets answer one output report.** `Sources/Corsair/CorsairProtocol.cs`
+  covers the VOID PRO Wireless headset: output report `C9 64` on the vendor interface
+  `FFC5:0001` (`HidReportKind.InputOutput`), answered by input report `0x64` with the level in byte 2
+  (bit `0x80` is set while the mic boom is raised/muted, verified by toggling it; masked off) and the
+  state in byte 4 (1 connected, 2 low, 4 full, 5 charging, 0 headset off - `ParseBattery` throws there
+  instead of publishing 0%). The layout comes from HeadsetControl and a Node tray app. Verified on a
+  VOID PRO Wireless `0A75` (dongle, interface 3: `FFC5:0001` is in 5 / out 20): discharging and
+  charging both read with a level, off answers state 0, and full on the cable answers state 4 with the
+  level still at 96.
+- **Rapoo and AULA were mapped on real hardware, not from a spec.** `Sources/Rapoo/RapooProtocol.cs`
+  (VT3 PRO, dongle `1215`, cable `4415`) sends nothing: the mouse pushes `BB B0 51 E8 03 <state>
+  <level>` about every 3.2 s on the `FF00:0002` collection with 7-byte reports (a sibling `FF00:0002`
+  with 10-byte reports stays silent). State 1 is on battery, 2 charging; on current firmware a
+  charging mouse sends level `0x7F`, which reads as Charging with no percent. There is no full state:
+  a full mouse on the cable sends state 2 with level 100, read as Full. **On the cable the pushes are
+  irregular** (3 s bursts, then 30-60 s of silence, while the mouse is in use), so a 4 s read and the
+  probe often miss them: the probe then falls back to the silent dongle collection and the reading
+  goes stale. Accepted as a known limitation; the fix would be a background listener caching the last
+  report per path, instead of listening per poll. Over the dongle the push is a steady 3.2 s. It is the one protocol
+  that listens only, so `ExchangeReportsAsync` skips the write for an empty request, and it overrides
+  `HidProtocol.ReadBudget` (4 s), because the 400 ms probe and 2 s read budgets are shorter than the
+  push interval. A switched-off mouse is silent, so the read times out. PID `1215` is not the VT3 PRO
+  id that the open-source Rapoo tools document (`1231`, `14A5`), and their report layouts do not
+  apply to it. `Sources/Aula/AulaProtocol.cs` (F75 on the Compx receiver `3554:FA09`) sends the
+  battery-hub / womier-l65-linux frame on `FF02:0002`: report `0x13`, command `0x4A`, 20 bytes, and
+  the last byte is the byte sum of the rest. The reply has the level in byte 5 and the state in byte 6
+  (`0x01` on battery, `0x10` with the cable in). With the cable in the level always reads 100, even at
+  a real 97%, so that reads as Charging with no percent (charging and full cannot be told apart). The receiver also pushes
+  unsolicited `0x13 0A` frames, so a reply must match the command and the checksum. In wired mode the
+  keyboard enumerates as a separate Sinowealth device (`258A:010C`), with an unknown protocol, and is
+  not read. Command `0x44` returns a 10-frame configuration dump (probably lighting) that is not
+  mapped. The 8BitDo Ultimate (`2DC8:3106`) is deliberately absent: its dongle presents an
+  XInput *wired* pad (`WIRED`/`FULL`) and has no vendor collection, so no battery reaches the PC.
+- **The DualSense needs one feature read over Bluetooth.** `Sources/Sony/SonyProtocol.cs` (`054C:0CE6`,
+  gamepad collection `0001:0005`) only listens, like Rapoo; the controller streams hundreds of
+  reports a second, so the default budgets suffice. The status byte (layout from Linux
+  hid-playstation) is byte 53 of the 64-byte USB report `0x01`, or byte 54 of the 78-byte Bluetooth
+  report `0x31`: the low nibble is the level in tenths (shown as level x 10, which matches what
+  the user sees elsewhere, not hid-playstation's x 10 + 5), the high nibble 0 discharging, 1
+  charging, 2 full. A fresh Bluetooth link sends only a short `0x01` report with no battery;
+  reading feature `0x05` (calibration) switches it to `0x31` until it disconnects. Verified on
+  real hardware by reconnecting the controller: only `0x01` before, `0x31` right after the read.
+  Nothing on this Windows (GameInput, Edge) did that switch on its own. That read goes through
+  `IHidTransport.GetFeatureAsync`, which only reads; `ExchangeAsync` always writes a feature first,
+  and writing `0x05` is something no reference implementation does. Lightbar, player LEDs, rumble
+  and adaptive triggers live in output report `0x02` (USB) and are not used.
 - **HID on macOS uses HidSharp for the feature reports and enumeration, through `IFeatureChannel`.**
   `HidSharpTransport` opens a device with `NativeHid` on Windows and with
   `HidStream.SetFeature/GetFeature` elsewhere; the loop, timing and buffer layout are unchanged apart
