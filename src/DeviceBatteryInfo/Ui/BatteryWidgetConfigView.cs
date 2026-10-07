@@ -30,6 +30,7 @@ internal static class BatteryWidgetConfigView
         var showTrend = new UiState<bool>(current.ShowTrend);
         var showRingTrend = new UiState<bool>(current.ShowRingTrend);
         var lowThreshold = new UiState<double>(current.LowThreshold);
+        var ringSize = new UiState<double>(current.RingSize);
         var sort = new UiState<string>(BatteryWidgetOptions.SortValue(current.Sort));
         var title = new UiState<string>(current.Title);
         var colors = new UiState<string>(BatteryWidgetOptions.ColorsValue(current.Colors));
@@ -183,6 +184,19 @@ internal static class BatteryWidgetConfigView
                 Step = 1,
                 ShowSlider = true,
                 Binding = Bind.To(lowThreshold),
+            }
+        );
+        appearance.Add(
+            new UiNumberInput
+            {
+                Key = "ringSize",
+                Label = Strings.Widgets.Config.RingSize.Label(),
+                Min = BatteryWidgetOptions.MinRingSize,
+                Max = BatteryWidgetOptions.MaxRingSize,
+                Step = 5,
+                ShowSlider = true,
+                Binding = Bind.To(ringSize),
+                VisibleWhen = OnlyFor(BatteryWidgetOptions.LayoutRings),
             }
         );
 

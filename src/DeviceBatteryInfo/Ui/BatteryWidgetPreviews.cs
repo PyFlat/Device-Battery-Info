@@ -113,6 +113,20 @@ internal static class BatteryWidgetPreviews
     public static UiElement PanelListCustomColors() =>
         PanelOf(BatteryWidgetSamples.PanelListCustomColors());
 
+    [UiPreview(
+        "Tile - smaller ring",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileSmallRing() => TileOf(BatteryWidgetSamples.TileSmallRing());
+
+    [UiPreview(
+        "Panel - smaller rings",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelSmallRings() => PanelOf(BatteryWidgetSamples.PanelSmallRings());
+
     private static UiElement PanelOf(BatteryWidgetModel model) =>
         BatteryWidgetView.Build(
             BatteryWidgetTypes.PanelId,

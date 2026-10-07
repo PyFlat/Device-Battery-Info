@@ -60,7 +60,7 @@ internal static class BatteryWidgetTypes
             : default;
 
     private const string DefaultData =
-        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false}""";
+        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100}""";
 
     private const string Schema = """
         {
@@ -83,6 +83,13 @@ internal static class BatteryWidgetTypes
               "description": "Show the recent charge/drain rate (for example -13%/1h) when there is no time-to-full to show instead."
             },
             "lowThreshold": { "type": "integer", "minimum": 1, "maximum": 99, "default": 20 },
+            "ringSize": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 100,
+              "default": 100,
+              "description": "The ring's size in percent of the room it has. The list layout has no ring."
+            },
             "sort": {
               "type": "string",
               "enum": ["manual", "lowest-first", "alphabetical", "charging-first"],

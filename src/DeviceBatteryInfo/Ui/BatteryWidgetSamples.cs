@@ -266,6 +266,18 @@ internal static class BatteryWidgetSamples
             },
         };
 
+    public static BatteryWidgetModel TileSmallRing() =>
+        TileDischarging() with
+        {
+            Options = BatteryWidgetOptions.Default with { RingSize = 60 },
+        };
+
+    public static BatteryWidgetModel PanelSmallRings() =>
+        PanelNamed() with
+        {
+            Options = PanelNamed().Options with { RingSize = 70 },
+        };
+
     private static BatteryWidgetRow Row(
         string id,
         string name,

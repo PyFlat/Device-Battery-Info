@@ -164,9 +164,15 @@ internal sealed record BatteryWidgetOptions(
     BatteryListAlignment ListAlign = BatteryListAlignment.Top,
     bool ShowRingTrend = false,
     string? BackgroundColor = null,
-    string? TextColor = null
+    string? TextColor = null,
+    int RingSize = BatteryWidgetOptions.MaxRingSize
 )
 {
+    public const int MinRingSize = 50;
+    public const int MaxRingSize = 100;
+
+    public double RingScale => Math.Clamp(RingSize, MinRingSize, MaxRingSize) / 100.0;
+
     public static readonly BatteryWidgetOptions Default = new(
         [],
         ShowBar: true,

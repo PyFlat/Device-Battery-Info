@@ -162,6 +162,9 @@ Design knowledge that is not obvious from the code alone:
   bolt exactly in the gap the gauge leaves at the top (`StartAngle`/`EndAngle`, 0 is up, clockwise).
   The face (glyph over percentage) must fit the gauge's inner circle, radius about 0.35 of the
   diameter: the corners of the percentage line are what collide, so check them, not just the height.
+  The ring fills its slot and the diameter only sizes its parts, so `ringSize` (50-100 %, default
+  100) shrinks a ring by capping its frame (`MaxWidth`/`MaxHeight`) at the scaled diameter and sizing
+  the parts from that; at 100 % the frame stays uncapped, so existing widgets render as before.
   Every `UiLength` is a fraction of the whole widget's basis, never of a grid cell, so the ring panel
   estimates its ring diameter (`BatteryWidgetView.Arrange`: the column count that gives the largest
   ring for the device count and aspect) and sizes each ring's parts reactively from that; a

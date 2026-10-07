@@ -344,13 +344,17 @@ internal static class BatteryWidgetView
     private static UiSize OfDiameter(Func<double> diameter, double fraction) =>
         UiSize.From(() => UiLength.OfBasis(fraction * diameter()));
 
+    // The ring fills its slot and `room` only estimates that slot, so a smaller ring caps its frame
+    // and sizes its parts from the capped diameter.
     private static UiModifier Ring(
         BatteryWidgetRow row,
         BatteryWidgetOptions options,
-        Func<double> diameter,
+        Func<double> room,
         bool showPercent
     )
     {
+        var scale = options.RingScale;
+        Func<double> diameter = scale < 1 ? () => room() * scale : room;
         var color = row.Color(options.LowThreshold, options.Colors);
         var charging = options.ShowCharging && row.Charging;
         var gap = charging ? ChargingGapDegrees : 0;
@@ -438,7 +442,19 @@ internal static class BatteryWidgetView
         {
             Key = "ring",
             Fill = true,
-            Frame = new UiFrame { AspectRatio = 1 },
+            Frame =
+                scale < 1
+                    ? UiValue.From(() =>
+                    {
+                        var edge = UiLength.OfBasis(diameter());
+                        return new UiFrame
+                        {
+                            AspectRatio = 1,
+                            MaxWidth = edge,
+                            MaxHeight = edge,
+                        };
+                    })
+                    : new UiFrame { AspectRatio = 1 },
             Child = new UiLayer { Key = "ring-layers", Children = layers },
         };
     }
@@ -779,7 +795,7 @@ internal static class BatteryWidgetView
                 new UiStack
                 {
                     Key = "ring-slot",
-                    MainSize = diameter,
+                    MainSize = diameter * options.RingScale,
                     Direction = UiComponentDirections.Vertical,
                     Justify = UiComponentJustify.Center,
                     Children = [Ring(row, options, () => diameter, showPercent: false)],

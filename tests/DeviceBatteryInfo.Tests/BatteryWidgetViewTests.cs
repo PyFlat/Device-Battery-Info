@@ -200,7 +200,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(16));
+        Assert.That(ours, Has.Length.EqualTo(18));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(
@@ -255,19 +255,65 @@ public sealed class BatteryWidgetViewTests
         );
     }
 
-    private static Dictionary<string, string?> TextColors(BatteryWidgetModel model)
+    // The ring fills its slot, so only a capped frame makes it smaller; full size keeps the old tree.
+    [TestCase(BatteryWidgetTypes.TileId)]
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    public void A_smaller_ring_caps_its_frame_and_full_size_does_not(string widgetId)
+    {
+        var model =
+            widgetId == BatteryWidgetTypes.TileId
+                ? BatteryWidgetSamples.TileDischarging()
+                : BatteryWidgetSamples.PanelNamed();
+
+        System.Text.Json.Nodes.JsonNode? RingFrame(int ringSize)
+        {
+            var root = TreeJson(
+                widgetId,
+                model with
+                {
+                    Options = model.Options with { RingSize = ringSize },
+                }
+            );
+            System.Text.Json.Nodes.JsonNode? Find(System.Text.Json.Nodes.JsonNode node)
+            {
+                if (node["id"]!.GetValue<string>().EndsWith(".ring", StringComparison.Ordinal))
+                {
+                    return node["properties"]?["frame"];
+                }
+
+                return (node["children"]?.AsArray() ?? [])
+                    .Select(child => Find(child!))
+                    .FirstOrDefault(frame => frame is not null);
+            }
+
+            return Find(root);
+        }
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(RingFrame(100)?["maxWidth"], Is.Null);
+            Assert.That(RingFrame(60)?["maxWidth"], Is.Not.Null);
+            Assert.That(RingFrame(60)?["maxHeight"], Is.Not.Null);
+        }
+    }
+
+    private static System.Text.Json.Nodes.JsonNode TreeJson(
+        string widgetId,
+        BatteryWidgetModel model
+    )
     {
         var view = new UiView(
             WidgetSurface(),
-            BatteryWidgetView.Build(
-                BatteryWidgetTypes.TileId,
-                new UiState<BatteryWidgetModel>(model),
-                16
-            )
+            BatteryWidgetView.Build(widgetId, new UiState<BatteryWidgetModel>(model), 16)
         );
-        var root = System.Text.Json.Nodes.JsonNode.Parse(
+        return System.Text.Json.Nodes.JsonNode.Parse(
             MacroDeck.Ui.Model.Serialization.UiCanonicalJson.Serialize(view.Tree.Root)
         )!;
+    }
+
+    private static Dictionary<string, string?> TextColors(BatteryWidgetModel model)
+    {
+        var root = TreeJson(BatteryWidgetTypes.TileId, model);
 
         var colors = new Dictionary<string, string?>
         {

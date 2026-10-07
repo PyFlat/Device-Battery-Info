@@ -215,6 +215,9 @@
     <data name="Widgets.Config.LowThreshold.Label" xml:space="preserve">
         <value>Low battery at (%)</value>
     </data>
+    <data name="Widgets.Config.RingSize.Label" xml:space="preserve">
+        <value>Ring size (%)</value>
+    </data>
 
     <data name="ConfigFlow.Device.Title" xml:space="preserve">
         <value>Add a battery device</value>
