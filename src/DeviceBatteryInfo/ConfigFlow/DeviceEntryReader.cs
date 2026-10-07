@@ -13,7 +13,7 @@ internal static class DeviceEntryReader
         CancellationToken cancellationToken
     )
     {
-        var entries = await Retry(
+        var entries = await HostCallRetry.RunAsync(
             () => config.GetEntriesAsync(cancellationToken),
             cancellationToken
         );
@@ -31,7 +31,7 @@ internal static class DeviceEntryReader
             async Task<string?> Read(string key)
             {
                 await Task.Delay(BetweenReads, cancellationToken).ConfigureAwait(false);
-                return await Retry(
+                return await HostCallRetry.RunAsync(
                         () => config.GetStringAsync(entry.Id, key, cancellationToken),
                         cancellationToken
                     )
@@ -81,27 +81,4 @@ internal static class DeviceEntryReader
 
         return slots;
     }
-
-    private static async Task<T> Retry<T>(Func<Task<T>> call, CancellationToken cancellationToken)
-    {
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                return await call().ConfigureAwait(false);
-            }
-            catch (Exception exception) when (attempt < 4 && IsTransient(exception))
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(150 * attempt), cancellationToken)
-                    .ConfigureAwait(false);
-            }
-        }
-    }
-
-    private static bool IsTransient(Exception exception) =>
-        exception.GetType().Name == "HostInvocationException"
-        && (
-            exception.Message.Contains("too quickly", StringComparison.OrdinalIgnoreCase)
-            || exception.Message.Contains("connection", StringComparison.OrdinalIgnoreCase)
-        );
 }

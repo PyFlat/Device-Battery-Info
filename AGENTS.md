@@ -121,6 +121,10 @@ Design knowledge that is not obvious from the code alone:
   default device and no options-based seeding, so a fresh install shows nothing until the user adds a
   device through the config flow (the widgets' empty state points them there). A device `Id` (the
   `battery_<id>_*` variable prefix, a public API) is `slug(name)`, deduped in entry-id order.
+- **Every host callback can be refused while the poll is busy.** The host throttles all of a
+  plugin's callbacks together, adb included, and a refused `RegisterWidgetTypeAsync` marks the whole
+  integration unusable (every widget shows "unavailable"). Wrap config reads and registrations in
+  `HostCallRetry.RunAsync`, which retries "too quickly" and connection refusals with backoff.
 - **`BatteryIntegration` is a singleton** (the hosting DI registers integrations that way) and also a
   capability-handler type, so the whole class obeys the no-blocking rule: variable push is
   fire-and-forget `async Task`, never awaited from the `registry.Changed` handler.
@@ -316,8 +320,9 @@ Design knowledge that is not obvious from the code alone:
   means the user has not enabled ADB for plugins, and the source throws so the poll loop logs it once
   and keeps the last value. The address is a serial or `host:port`; only the latter is passed to
   `ConnectAsync`, because a USB serial cannot be connected to. The host allows 4 concurrent adb calls
-  per plugin and refuses the fifth with `RateLimited`, which matters if more phones are added than
-  that. The config flow's phone picker (`SystemDeviceDiscovery.ListAndroidDevicesAsync`) reads each
+  per plugin and refuses the fifth with `RateLimited`, and adb counts toward the plugin's shared
+  callback throttle, so `AdbBatterySourceProvider` gates every phone's reads through one semaphore of
+  2 (a user with 4 phones made the poll refuse its own widget-type registration). The config flow's phone picker (`SystemDeviceDiscovery.ListAndroidDevicesAsync`) reads each
   attached phone's battery one at a time for the same reason, and shares `DeviceConfigFlow.PickerField`
   with the Bluetooth picker: a list when something is attached, a text field when nothing is or an
   existing entry is being edited, plus a manual override field. Tests use `FakeAndroidDeviceManager`

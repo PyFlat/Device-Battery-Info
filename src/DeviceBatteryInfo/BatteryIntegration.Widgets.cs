@@ -24,7 +24,11 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
     {
         foreach (var descriptor in BatteryWidgetTypes.All)
         {
-            var registration = await context.RegisterWidgetTypeAsync(descriptor, cancellationToken);
+            // A refusal here would leave the whole integration unusable, so it waits out the throttle.
+            var registration = await HostCallRetry.RunAsync(
+                () => context.RegisterWidgetTypeAsync(descriptor, cancellationToken),
+                cancellationToken
+            );
             _widgetTypeIds[descriptor.Id] = registration.WidgetTypeId;
             _logger.Information(
                 "Registered widget type {LocalId} as {QualifiedId}.",

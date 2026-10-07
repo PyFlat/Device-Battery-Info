@@ -3,10 +3,14 @@ using MacroDeck.Sdk.Android;
 
 namespace DeviceBatteryInfo.Sources.Adb;
 
-internal sealed class AdbBatterySource(IAndroidDeviceManager android, BatterySlot slot)
-    : IBatterySource
+internal sealed class AdbBatterySource(
+    IAndroidDeviceManager android,
+    BatterySlot slot,
+    SemaphoreSlim gate
+) : IBatterySource
 {
     private readonly IAndroidDeviceManager _android = android;
+    private readonly SemaphoreSlim _gate = gate;
     private readonly string _address = slot.AdbAddress!;
 
     public string Id { get; } = slot.Id;
@@ -24,9 +28,17 @@ internal sealed class AdbBatterySource(IAndroidDeviceManager android, BatterySlo
             );
         }
 
-        var device = await FindOrConnectAsync(cancellationToken);
-        var battery = await device.GetBatteryStateAsync(cancellationToken);
-        return AdbBatteryMapper.ToReading(battery);
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var device = await FindOrConnectAsync(cancellationToken);
+            var battery = await device.GetBatteryStateAsync(cancellationToken);
+            return AdbBatteryMapper.ToReading(battery);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     private async Task<IAndroidDevice> FindOrConnectAsync(CancellationToken cancellationToken)
@@ -52,8 +64,11 @@ internal sealed class AdbBatterySource(IAndroidDeviceManager android, BatterySlo
 }
 
 internal sealed class AdbBatterySourceProvider(IAndroidDeviceManager android, DeviceCatalog catalog)
-    : IBatterySourceProvider
+    : IBatterySourceProvider, IDisposable
 {
+    // The host refuses a fifth concurrent adb call, and adb counts toward the plugin's callback
+    // budget, so two phones at a time leave room for the picker and the plugin's other calls.
+    private readonly SemaphoreSlim _gate = new(2, 2);
     private readonly IAndroidDeviceManager _android = android;
     private readonly DeviceCatalog _catalog = catalog;
 
@@ -65,9 +80,11 @@ internal sealed class AdbBatterySourceProvider(IAndroidDeviceManager android, De
             .Devices.Where(d =>
                 d.Type == DeviceType.AdbPhone && !string.IsNullOrWhiteSpace(d.AdbAddress)
             )
-            .Select(IBatterySource (d) => new AdbBatterySource(_android, d))
+            .Select(IBatterySource (d) => new AdbBatterySource(_android, d, _gate))
             .ToArray();
 
         return ValueTask.FromResult<IReadOnlyList<IBatterySource>>(sources);
     }
+
+    public void Dispose() => _gate.Dispose();
 }
