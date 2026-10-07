@@ -239,6 +239,33 @@ internal static class BatteryWidgetSamples
             BatteryWidgetOptions.Default
         );
 
+    public static BatteryWidgetModel TileCustomColors() =>
+        TileDischarging() with
+        {
+            Options = BatteryWidgetOptions.Default with
+            {
+                BackgroundColor = "#F2F2F7",
+                TextColor = "#1C1C1E",
+            },
+        };
+
+    public static BatteryWidgetModel TileTransparent() =>
+        TileCharging() with
+        {
+            Options = BatteryWidgetOptions.Default with { BackgroundColor = "transparent" },
+        };
+
+    public static BatteryWidgetModel PanelListCustomColors() =>
+        PanelList() with
+        {
+            Options = PanelList().Options with
+            {
+                Title = "Batteries",
+                BackgroundColor = "#0A2540",
+                TextColor = "#FFD60A",
+            },
+        };
+
     private static BatteryWidgetRow Row(
         string id,
         string name,

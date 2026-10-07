@@ -228,8 +228,16 @@ internal static class BatteryWidgetConfigView
             );
         }
 
-        // Macro Deck draws the border itself from the stored "border" key.
-        appearance.Add(UiWidgetAppearance.Section(data, UiWidgetAppearanceFields.Border));
+        // Macro Deck draws the border itself from the stored "border" key; the view draws the colours.
+        appearance.Add(
+            UiWidgetAppearance.Section(
+                data,
+                UiWidgetAppearanceFields.BackgroundColor
+                    | UiWidgetAppearanceFields.TransparentBackground
+                    | UiWidgetAppearanceFields.LabelColor
+                    | UiWidgetAppearanceFields.Border
+            )
+        );
 
         return new UiWidgetConfiguration
         {

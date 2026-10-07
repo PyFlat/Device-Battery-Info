@@ -200,7 +200,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(13));
+        Assert.That(ours, Has.Length.EqualTo(16));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(
@@ -226,6 +226,70 @@ public sealed class BatteryWidgetViewTests
             Assert.That(instance.View.Tree.Root, Is.Not.Null);
             await instance.DisposeAsync();
         }
+    }
+
+    // The renderer takes #rrggbb only, so fainter text is mixed toward an opaque background.
+    [Test]
+    public void Custom_colours_reach_the_background_and_every_text_role()
+    {
+        var model = BatteryWidgetSamples.TileCustomColors();
+        var colors = TextColors(model);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(colors["background"], Is.EqualTo("#F2F2F7"));
+            Assert.That(colors["pct"], Is.EqualTo("#1C1C1E"));
+            Assert.That(colors["name"], Is.EqualTo("#474749"));
+            Assert.That(colors["caption"], Is.EqualTo("#727275"));
+        }
+
+        var unknownBackdrop = TextColors(
+            model with
+            {
+                Options = model.Options with { BackgroundColor = "transparent" },
+            }
+        );
+        Assert.That(
+            new[] { unknownBackdrop["pct"], unknownBackdrop["name"], unknownBackdrop["caption"] },
+            Is.All.EqualTo("#1C1C1E")
+        );
+    }
+
+    private static Dictionary<string, string?> TextColors(BatteryWidgetModel model)
+    {
+        var view = new UiView(
+            WidgetSurface(),
+            BatteryWidgetView.Build(
+                BatteryWidgetTypes.TileId,
+                new UiState<BatteryWidgetModel>(model),
+                16
+            )
+        );
+        var root = System.Text.Json.Nodes.JsonNode.Parse(
+            MacroDeck.Ui.Model.Serialization.UiCanonicalJson.Serialize(view.Tree.Root)
+        )!;
+
+        var colors = new Dictionary<string, string?>
+        {
+            ["background"] = root["properties"]?["background"]?.GetValue<string>(),
+        };
+        void Walk(System.Text.Json.Nodes.JsonNode node)
+        {
+            var id = node["id"]!.GetValue<string>();
+            var leaf = id[(id.LastIndexOf('.') + 1)..];
+            if (node["properties"]?["color"] is { } color && leaf is "pct" or "name" or "caption")
+            {
+                colors[leaf] = color.GetValue<string>();
+            }
+
+            foreach (var child in node["children"]?.AsArray() ?? [])
+            {
+                Walk(child!);
+            }
+        }
+
+        Walk(root);
+        return colors;
     }
 
     [Test]

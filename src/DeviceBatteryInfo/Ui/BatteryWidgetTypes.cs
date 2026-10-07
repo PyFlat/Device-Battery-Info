@@ -26,6 +26,7 @@ internal static class BatteryWidgetTypes
             {
                 SupportsFlows = true,
                 DefaultShortPressAction = RefreshOnPress,
+                AppearanceProperties = Appearance,
             },
             new WidgetTypeDescriptor(
                 TileId,
@@ -38,8 +39,16 @@ internal static class BatteryWidgetTypes
             {
                 SupportsFlows = true,
                 DefaultShortPressAction = RefreshOnPress,
+                AppearanceProperties = Appearance,
             },
         ];
+
+    // Lets Macro Deck's Set Background Color and Set Label Color actions reach these widgets.
+    private static readonly WidgetAppearanceProperty[] Appearance =
+    [
+        WidgetAppearanceProperty.BackgroundColor,
+        WidgetAppearanceProperty.LabelColor,
+    ];
 
     // Runs until the user gives the widget a Short Press action of their own; their action wins.
     private static readonly WidgetDefaultAction RefreshOnPress = new(RefreshBatteryAction.ActionId);
@@ -109,6 +118,14 @@ internal static class BatteryWidgetTypes
                 "color": { "type": "string" }
               },
               "description": "The border Macro Deck draws around the widget, written by the border fields and the Set Border action."
+            },
+            "backgroundColor": {
+              "type": "string",
+              "description": "The widget's background, #rrggbb or transparent. Absent means the deck's own tile face."
+            },
+            "labelColor": {
+              "type": "string",
+              "description": "The text colour, #rrggbb. Secondary and muted text use it fainter. Absent means the theme's text colours."
             },
             "showNames": {
               "type": "boolean",

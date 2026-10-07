@@ -202,8 +202,16 @@ Design knowledge that is not obvious from the code alone:
 - **Macro Deck draws the widget border, not the plugin.** The host draws the ring around any widget
   from the stored `border` key (`{ "style", "color" }`), so the config form only adds
   `UiWidgetAppearance.Section(data, UiWidgetAppearanceFields.Border)` and the `DataSchema` must allow
-  `border`. Other appearance values (background, label colour) are drawn by the plugin itself. The
-  section's colour field is conditioned on `style` inside the `border` object scope (`border.style`).
+  `border`. The section's colour field is conditioned on `style` inside the `border` object scope
+  (`border.style`). Background and text colour come from the same section (`BackgroundColor`,
+  `TransparentBackground`, `LabelColor`) and are drawn by the plugin: `UiWidgetAppearance.Read` fills
+  `BatteryWidgetOptions.BackgroundColor`/`TextColor`, the root stack's `Background` takes the stored
+  value as is (`transparent` on the root drops the deck's tile face), and both descriptors declare
+  them in `AppearanceProperties` so the Set Background Color / Set Label Color actions reach the
+  widgets. A text `Color` takes `#rrggbb` only (an 8-digit hex is ignored), so secondary and muted
+  text are mixed toward an opaque background (80 % and 60 %) and use the full colour over the theme's
+  face or a transparent one. `UiGauge` has no track colour, so the ring's empty track stays the
+  theme's on a custom background (accepted).
 - **Widget previews:** `Ui/BatteryWidgetPreviews.cs` has one `static` parameterless method per
   scenario, each `[UiPreview(name, View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]`
   returning a `UiElement`. `UiPreviewCatalog.Scan` (run by the hosting `ui` capability over the

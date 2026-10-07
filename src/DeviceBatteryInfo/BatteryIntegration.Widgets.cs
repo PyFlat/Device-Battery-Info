@@ -3,6 +3,7 @@ using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Ui;
 using MacroDeck.Sdk.Ui;
 using MacroDeck.Sdk.Widgets;
+using MacroDeck.Ui.Config;
 using MacroDeck.Ui.Model.Surfaces;
 using MacroDeck.Ui.Runtime;
 
@@ -280,6 +281,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 ? BatteryWidgetOptions.ParseListAlign(listAlignValue.GetString())
                 : BatteryWidgetOptions.Default.ListAlign;
 
+        var appearance = UiWidgetAppearance.Read(obj);
+
         return new BatteryWidgetOptions(
             sourceIds,
             Flag("showBar", true),
@@ -294,9 +297,14 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             Flag("showNames", false),
             colors,
             listAlign,
-            Flag("showRingTrend", false)
+            Flag("showRingTrend", false),
+            NonEmpty(appearance.BackgroundColor),
+            NonEmpty(appearance.LabelColor)
         );
     }
+
+    private static string? NonEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string? Attribute(UiSurface surface, string key) =>
         surface.Attributes.TryGetValue(key, out var value)

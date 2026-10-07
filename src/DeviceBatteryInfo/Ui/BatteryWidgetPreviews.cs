@@ -91,6 +91,28 @@ internal static class BatteryWidgetPreviews
     )]
     public static UiElement TileNoSignal() => TileOf(BatteryWidgetSamples.TileNoSignal());
 
+    [UiPreview(
+        "Tile - custom colours",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileCustomColors() => TileOf(BatteryWidgetSamples.TileCustomColors());
+
+    [UiPreview(
+        "Tile - transparent background",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileTransparent() => TileOf(BatteryWidgetSamples.TileTransparent());
+
+    [UiPreview(
+        "Panel - list with custom colours",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelListCustomColors() =>
+        PanelOf(BatteryWidgetSamples.PanelListCustomColors());
+
     private static UiElement PanelOf(BatteryWidgetModel model) =>
         BatteryWidgetView.Build(
             BatteryWidgetTypes.PanelId,

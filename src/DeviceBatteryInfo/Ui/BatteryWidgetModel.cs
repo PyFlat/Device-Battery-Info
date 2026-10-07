@@ -162,7 +162,9 @@ internal sealed record BatteryWidgetOptions(
     bool ShowNames = false,
     BatteryColorScheme Colors = BatteryColorScheme.LevelsCharging,
     BatteryListAlignment ListAlign = BatteryListAlignment.Top,
-    bool ShowRingTrend = false
+    bool ShowRingTrend = false,
+    string? BackgroundColor = null,
+    string? TextColor = null
 )
 {
     public static readonly BatteryWidgetOptions Default = new(

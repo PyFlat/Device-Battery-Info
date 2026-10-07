@@ -58,6 +58,59 @@ internal static class BatteryWidgetView
         return UiSize.Of(UiLength.Capped(inset / UiLength.Cell, inset));
     }
 
+    // Passed to the root as stored: "transparent" there also drops the deck's tile face.
+    private static UiValue<string> Background(BatteryWidgetOptions options) =>
+        options.BackgroundColor is { } color ? UiValue.Of(color) : UiValue.None<string>();
+
+    // One stored text colour. The renderer takes #rrggbb only, so secondary and muted text are mixed
+    // toward a known opaque background; over the theme's face or a transparent one they use it as is.
+    private static UiValue<string> TextColor(BatteryWidgetOptions options, string role)
+    {
+        if (options.TextColor is not { } color)
+        {
+            return UiValue.None<string>();
+        }
+
+        if (
+            role == UiComponentTextRoles.Primary
+            || !IsOpaqueHex(color)
+            || options.BackgroundColor is not { } background
+            || !IsOpaqueHex(background)
+        )
+        {
+            return UiValue.Of(color);
+        }
+
+        return UiValue.Of(Mix(color, background, role == UiComponentTextRoles.Secondary ? 0.8 : 0.6));
+    }
+
+    private static string Mix(string color, string background, double weight)
+    {
+        int Channel(string hex, int index) =>
+            int.Parse(
+                hex.AsSpan(1 + (2 * index), 2),
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture
+            );
+
+        return "#"
+            + string.Concat(
+                Enumerable
+                    .Range(0, 3)
+                    .Select(i =>
+                        ((int)Math.Round(
+                            (Channel(color, i) * weight) + (Channel(background, i) * (1 - weight))
+                        )).ToString("X2", System.Globalization.CultureInfo.InvariantCulture)
+                    )
+            );
+    }
+
+    private static string PercentRole(BatteryWidgetRow row) =>
+        row.Stale ? UiComponentTextRoles.Muted : UiComponentTextRoles.Primary;
+
+    private static bool IsOpaqueHex(string color) =>
+        color.Length == 7 && color[0] == '#' && color.Skip(1).All(char.IsAsciiHexDigit);
+
     private static UiStack Panel(UiState<BatteryWidgetModel> state, int cornerRadius)
     {
         var options = state.Value.Options;
@@ -76,6 +129,7 @@ internal static class BatteryWidgetView
                     MinSize = 0.045,
                     Weight = UiComponentTextWeights.SemiBold,
                     Role = UiComponentTextRoles.Muted,
+                    Color = TextColor(options, UiComponentTextRoles.Muted),
                     MaxLines = 1,
                     Wrap = false,
                 }
@@ -98,7 +152,7 @@ internal static class BatteryWidgetView
             {
                 Key = "empty",
                 Condition = () => state.Value.Rows.Count == 0,
-                Content = () => EmptyText("empty-text", 0.085),
+                Content = () => EmptyText("empty-text", 0.085, options),
             }
         );
 
@@ -109,12 +163,13 @@ internal static class BatteryWidgetView
             Justify = UiComponentJustify.Start,
             Fill = true,
             Padding = SafeArea(cornerRadius),
+            Background = Background(options),
             Gap = 0.035,
             Children = children,
         };
     }
 
-    private static UiStack EmptyText(string key, double size) =>
+    private static UiStack EmptyText(string key, double size, BatteryWidgetOptions options) =>
         new()
         {
             Key = key + "-wrap",
@@ -130,6 +185,7 @@ internal static class BatteryWidgetView
                     Size = UiSize.FromBasis(size, 0.4),
                     MinSize = 0.05,
                     Role = UiComponentTextRoles.Muted,
+                    Color = TextColor(options, UiComponentTextRoles.Muted),
                     Align = UiComponentAlignments.Center,
                     Wrap = true,
                     MaxLines = 3,
@@ -247,6 +303,7 @@ internal static class BatteryWidgetView
                     Text = row.Name,
                     Size = OfDiameter(diameter, 0.15),
                     Role = UiComponentTextRoles.Secondary,
+                    Color = TextColor(options, UiComponentTextRoles.Secondary),
                     Weight = UiComponentTextWeights.Medium,
                     Align = UiComponentAlignments.Center,
                     MaxLines = 1,
@@ -265,6 +322,7 @@ internal static class BatteryWidgetView
                     Text = row.Stale || string.IsNullOrEmpty(row.Trend) ? "–" : row.Trend,
                     Size = OfDiameter(diameter, 0.12),
                     Role = UiComponentTextRoles.Muted,
+                    Color = TextColor(options, UiComponentTextRoles.Muted),
                     Align = UiComponentAlignments.Center,
                     MaxLines = 1,
                     Wrap = false,
@@ -355,7 +413,8 @@ internal static class BatteryWidgetView
                     Text = row.PercentText(),
                     Size = OfDiameter(diameter, FacePercent),
                     Weight = UiComponentTextWeights.SemiBold,
-                    Role = row.Stale ? UiComponentTextRoles.Muted : UiComponentTextRoles.Primary,
+                    Role = PercentRole(row),
+                    Color = TextColor(options, PercentRole(row)),
                     Align = UiComponentAlignments.Center,
                     MaxLines = 1,
                     Wrap = false,
@@ -471,7 +530,7 @@ internal static class BatteryWidgetView
         var caption = Caption(row, options);
 
         // Shrinking would count as fitting, so the inline texts keep their size and truncate instead.
-        var name = NameText(row.Name);
+        var name = NameText(row.Name, options);
         var nameGroup = new List<UiElement> { inline ? name : name with { MinSize = 0.048 } };
         if (caption is { } captionText)
         {
@@ -481,6 +540,7 @@ internal static class BatteryWidgetView
                 Text = captionText,
                 Size = UiSize.FromBasis(CaptionSize, 0.34),
                 Role = UiComponentTextRoles.Muted,
+                Color = TextColor(options, UiComponentTextRoles.Muted),
                 MaxLines = 1,
                 Wrap = false,
             };
@@ -519,7 +579,8 @@ internal static class BatteryWidgetView
                     MinSize = 0.055,
                     Digits = 4,
                     Weight = UiComponentTextWeights.SemiBold,
-                    Role = row.Stale ? UiComponentTextRoles.Muted : UiComponentTextRoles.Primary,
+                    Role = PercentRole(row),
+                    Color = TextColor(options, PercentRole(row)),
                     Align = UiComponentAlignments.End,
                 }
             );
@@ -560,7 +621,7 @@ internal static class BatteryWidgetView
         };
     }
 
-    private static UiTextRun NameText(string name) =>
+    private static UiTextRun NameText(string name, BatteryWidgetOptions options) =>
         new()
         {
             Key = "name",
@@ -568,6 +629,7 @@ internal static class BatteryWidgetView
             Size = UiSize.FromBasis(NameSize, 0.44),
             Weight = UiComponentTextWeights.Medium,
             Role = UiComponentTextRoles.Secondary,
+            Color = TextColor(options, UiComponentTextRoles.Secondary),
             MaxLines = 1,
             Wrap = false,
         };
@@ -581,6 +643,7 @@ internal static class BatteryWidgetView
             Justify = UiComponentJustify.Center,
             Fill = true,
             Padding = SafeArea(cornerRadius),
+            Background = Background(state.Value.Options),
             Children =
             [
                 new UiRepeat<BatteryWidgetRow>
@@ -608,7 +671,7 @@ internal static class BatteryWidgetView
                 {
                     Key = "tile-empty",
                     Condition = () => state.Value.Rows.Count == 0,
-                    Content = () => EmptyText("tile-empty-text", 0.09),
+                    Content = () => EmptyText("tile-empty-text", 0.09, state.Value.Options),
                 },
             ],
         };
@@ -632,6 +695,7 @@ internal static class BatteryWidgetView
                 Size = UiSize.FromBasis(0.1, 0.9),
                 MinSize = 0.055,
                 Role = UiComponentTextRoles.Secondary,
+                Color = TextColor(options, UiComponentTextRoles.Secondary),
                 Weight = UiComponentTextWeights.Medium,
                 MaxLines = 1,
                 Wrap = false,
@@ -641,7 +705,7 @@ internal static class BatteryWidgetView
 
         if (caption is { } captionText)
         {
-            children.Add(CaptionText(captionText, UiComponentAlignments.Center));
+            children.Add(CaptionText(captionText, UiComponentAlignments.Center, options));
         }
 
         return new UiStack
@@ -669,6 +733,7 @@ internal static class BatteryWidgetView
                 Size = UiSize.FromBasis(0.12, 0.3),
                 MinSize = 0.055,
                 Role = UiComponentTextRoles.Secondary,
+                Color = TextColor(options, UiComponentTextRoles.Secondary),
                 Weight = UiComponentTextWeights.Medium,
                 MaxLines = 1,
                 Wrap = false,
@@ -685,7 +750,8 @@ internal static class BatteryWidgetView
                     Size = UiSize.FromBasis(0.3, 0.6),
                     MinSize = 0.12,
                     Weight = UiComponentTextWeights.Bold,
-                    Role = row.Stale ? UiComponentTextRoles.Muted : UiComponentTextRoles.Primary,
+                    Role = PercentRole(row),
+                    Color = TextColor(options, PercentRole(row)),
                     MaxLines = 1,
                     Wrap = false,
                 }
@@ -695,7 +761,7 @@ internal static class BatteryWidgetView
         if (caption is { } captionText)
         {
             details.Add(
-                CaptionText(captionText, UiComponentAlignments.Start) with
+                CaptionText(captionText, UiComponentAlignments.Start, options) with
                 {
                     Size = UiSize.FromBasis(0.1, 0.9),
                 }
@@ -731,7 +797,11 @@ internal static class BatteryWidgetView
         };
     }
 
-    private static UiTextRun CaptionText(LocalizedText text, string align) =>
+    private static UiTextRun CaptionText(
+        LocalizedText text,
+        string align,
+        BatteryWidgetOptions options
+    ) =>
         new()
         {
             Key = "caption",
@@ -739,6 +809,7 @@ internal static class BatteryWidgetView
             Size = UiSize.FromBasis(0.075, 0.9),
             MinSize = 0.045,
             Role = UiComponentTextRoles.Muted,
+            Color = TextColor(options, UiComponentTextRoles.Muted),
             MaxLines = 1,
             Wrap = false,
             Align = align,
