@@ -54,7 +54,8 @@ src/DeviceBatteryInfo/
   Core/                    IBatterySource, BatteryReading, BatteryRegistry, BatteryPollingService,
                            BatteryPluginOptions, BatterySlots (config -> device set, one place),
                            BatteryTrendTracker (per-device charge history -> BatteryTrend),
-                           BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate)
+                           BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate),
+                           ChargingInference (a rising level -> Charging, for sources that cannot tell)
   Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands
                            Razer, Logitech, Corsair, Rapoo, Aula, Sony), each a pure parser + an IO
                            wrapper behind an interface + IBatterySource(+Provider);
@@ -246,6 +247,15 @@ Design knowledge that is not obvious from the code alone:
   released widgets already store `showTrend: true`, which would shrink every existing ring. Both the `trend`
   and `trend-rate` variable suffixes are public API like every other field suffix in
   `BatteryVariableCatalog`.
+- **Charging is inferred where a source cannot tell.** Bluetooth only ever reports a level, so
+  `BluetoothBatterySource` fills in `Discharging` with `BatteryReading.StatusIsAssumed`; an `Unknown`
+  status counts the same. `ChargingInference` (a DI singleton like `BatteryTrendTracker`, applied by
+  the poll loop before `BatteryRegistry.Update`) turns such a reading into `Charging` once the level is
+  `MinRise` (2) points above its lowest in the last `RiseWindow` (15 min), and back on any drop below
+  the peak or after `IdleTimeout` (30 min) without a rise, restarting its history so the old low cannot
+  re-trigger. It sits before the registry on purpose: the widgets, the `charging`/`status` variables,
+  the trend segments and the charging events all see the same state (the user chose this over a
+  widget-only guess). A state a source reported is never replaced.
 - **Bluetooth battery data lives on a different PnP node than the one the user picks, and is only
   cached opportunistically.** `PowerShellPnpBatteryReader` reads `DEVPKEY_Bluetooth_Battery` from
   Windows' own PnP device tree. Every physical device shows up as many PnP nodes sharing one 6-byte

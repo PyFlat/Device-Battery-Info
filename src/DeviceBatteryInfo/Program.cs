@@ -18,6 +18,7 @@ builder
 
 builder.Services.AddSingleton<BatteryRegistry>();
 builder.Services.AddSingleton<BatteryTrendTracker>();
+builder.Services.AddSingleton<ChargingInference>();
 builder.Services.AddSingleton<DeviceCatalog>();
 builder.Services.AddBatterySources();
 

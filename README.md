@@ -51,9 +51,16 @@ These work with whatever hardware of that kind you have.
 | This computer / laptop         | macOS    | `pmset -g batt`                                 | yes     | yes      |
 | This computer / laptop         | Linux    | `/sys/class/power_supply`                       | yes     | yes      |
 | Android phone                  | all      | Macro Deck's own adb connection                 | yes     | yes      |
-| Bluetooth audio device         | Windows  | PnP battery property via PowerShell             | yes     | rarely   |
-| Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | no       |
-| Bluetooth device               | Linux    | BlueZ's `Battery1` over D-Bus (`busctl`)        | yes     | no       |
+| Bluetooth audio device         | Windows  | PnP battery property via PowerShell             | yes     | inferred |
+| Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | inferred |
+| Bluetooth device               | Linux    | BlueZ's `Battery1` over D-Bus (`busctl`)        | yes     | inferred |
+
+Bluetooth reports only a level, never whether the device charges. So a level that rises by at least
+2 points within 15 minutes counts as charging, everywhere: the widgets, the `charging` and `status`
+variables and the charging events. It ends as soon as the level drops, or after 30 minutes without a
+rise. A device that reports in 10 % steps shows charging after its first step up, so the indicator
+can lag the charger by one step. The same applies to any source that reports a level with an unknown
+charging state.
 
 On macOS a Bluetooth device reports one level: its main battery, or the lower of the left and right
 earbud (the case is ignored). Connected devices that `system_profiler` lists without a battery, such as

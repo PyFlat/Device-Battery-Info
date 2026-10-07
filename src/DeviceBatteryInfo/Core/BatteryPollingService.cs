@@ -7,12 +7,14 @@ namespace DeviceBatteryInfo.Core;
 public sealed class BatteryPollingService(
     IEnumerable<IBatterySourceProvider> providers,
     BatteryRegistry registry,
+    ChargingInference charging,
     IOptionsMonitor<BatteryPluginOptions> options,
     ILogger logger
 ) : BackgroundService
 {
     private readonly IReadOnlyList<IBatterySourceProvider> _providers = providers.ToArray();
     private readonly BatteryRegistry _registry = registry;
+    private readonly ChargingInference _charging = charging;
     private readonly IOptionsMonitor<BatteryPluginOptions> _options = options;
     private readonly ILogger _logger = logger.ForContext<BatteryPollingService>();
     private readonly SemaphoreSlim _wake = new(0, 1);
@@ -82,7 +84,7 @@ public sealed class BatteryPollingService(
                 try
                 {
                     var reading = await source.ReadAsync(timeout.Token);
-                    _registry.Update(source, reading);
+                    _registry.Update(source, _charging.Apply(source.Id, reading));
                     if (_lastFailed.TryGetValue(source.Id, out var wasFailing) && wasFailing)
                     {
                         _logger.Information("Source {SourceId} recovered.", source.Id);

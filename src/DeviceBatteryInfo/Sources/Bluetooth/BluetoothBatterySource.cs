@@ -23,7 +23,12 @@ internal sealed class BluetoothBatterySource(IBluetoothBatteryReader reader, Bat
             ? throw new InvalidOperationException(
                 $"The system has no battery reading for '{_friendlyName}'."
             )
-            : new BatteryReading { Percent = percent, Status = BatteryStatus.Discharging };
+            : new BatteryReading
+            {
+                Percent = percent,
+                Status = BatteryStatus.Discharging,
+                StatusIsAssumed = true,
+            };
     }
 }
 

@@ -21,6 +21,7 @@ public sealed class BatteryIntegrationTests
             builder.Services.AddOptions<BatteryPluginOptions>();
             builder.Services.AddSingleton<BatteryRegistry>();
             builder.Services.AddSingleton<BatteryTrendTracker>();
+            builder.Services.AddSingleton<ChargingInference>();
             builder.Services.AddSingleton<DeviceCatalog>();
             builder.Services.AddBatterySources();
             builder.Services.AddSingleton<BatteryPollingService>();
