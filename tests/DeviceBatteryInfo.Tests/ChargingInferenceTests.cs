@@ -34,7 +34,6 @@ public sealed class ChargingInferenceTests
         return (new ChargingInference(registry, time), registry, time);
     }
 
-    // What the Bluetooth source reports: a level, and a discharging state it cannot actually know.
     private static BatteryReading Assumed(int percent) =>
         new()
         {

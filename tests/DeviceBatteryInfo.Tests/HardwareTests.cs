@@ -38,7 +38,8 @@ public sealed class HardwareTests
     private static IBluetoothBatteryReader PlatformBluetoothReader() =>
         OperatingSystem.IsMacOS() ? new MacBluetoothBatteryReader(Serilog.Core.Logger.None)
         : OperatingSystem.IsLinux() ? new BlueZBatteryReader()
-        : new PowerShellPnpBatteryReader();
+        : OperatingSystem.IsWindows() ? new WindowsBluetoothBatteryReader()
+        : throw new PlatformNotSupportedException();
 
     [Test]
     public async Task Reads_the_system_battery()
@@ -75,6 +76,25 @@ public sealed class HardwareTests
                 device.Percent is { } percent ? $"{percent}%" : "no battery value"
             );
         }
+    }
+
+    [Test]
+    public async Task Reads_every_bluetooth_device_in_one_poll()
+    {
+        var reader = PlatformBluetoothReader();
+        var names = (await reader.ListDevicesAsync(CancellationToken.None)).Select(d => d.Name).ToArray();
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var levels = await Task.WhenAll(names.Select(n => reader.ReadRawAsync(n, CancellationToken.None)));
+        watch.Stop();
+
+        foreach (var (name, raw) in names.Zip(levels))
+        {
+            HardwareReport.Line($"Bluetooth {name}", raw is null ? "no battery value" : $"{raw}%");
+        }
+
+        HardwareReport.Line("Bluetooth poll", $"{names.Length} device(s) in {watch.ElapsedMilliseconds} ms");
+        Assert.That(watch.Elapsed, Is.LessThan(TimeSpan.FromSeconds(5)));
     }
 
     [Test]

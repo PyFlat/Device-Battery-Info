@@ -12,8 +12,7 @@ public sealed record BatteryReading
 
     public TimeSpan? TimeToEmpty { get; init; }
 
-    // The source could not tell charging from discharging and filled in Status itself, so
-    // ChargingInference may replace it from the level's trend.
+    // Status is the source's guess, so ChargingInference may replace it.
     public bool StatusIsAssumed { get; init; }
 
     public bool IsCharging => Status is BatteryStatus.Charging;

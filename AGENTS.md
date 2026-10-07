@@ -61,8 +61,8 @@ src/DeviceBatteryInfo/
                            wrapper behind an interface + IBatterySource(+Provider);
                            SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset,
                            Linux: /sys/class/power_supply) and Bluetooth has IBluetoothBatteryReader
-                           (Windows: PowerShell PnP, macOS: system_profiler plus pmset accps, Linux:
-                           busctl against BlueZ; the last two share BluetoothSnapshot), picked by
+                           (Windows: cfgmgr32, macOS: system_profiler plus pmset accps, Linux:
+                           busctl against BlueZ; all three share BluetoothSnapshot), picked by
                            OperatingSystem in BatterySourceRegistration;
                            ExternalProcess runs the command line tools;
                            BatterySourceRegistration wires them into DI. DeviceFamily.cs holds the
@@ -257,7 +257,7 @@ Design knowledge that is not obvious from the code alone:
   the trend segments and the charging events all see the same state (the user chose this over a
   widget-only guess). A state a source reported is never replaced.
 - **Bluetooth battery data lives on a different PnP node than the one the user picks, and is only
-  cached opportunistically.** `PowerShellPnpBatteryReader` reads `DEVPKEY_Bluetooth_Battery` from
+  cached opportunistically.** `WindowsBluetoothBatteryReader` reads `DEVPKEY_Bluetooth_Battery` from
   Windows' own PnP device tree. Every physical device shows up as many PnP nodes sharing one 6-byte
   Bluetooth address (`BTHENUM\DEV_<mac>\...` is the single root node whose `FriendlyName` matches what
   Windows Settings/Device Manager show; everything else is a sibling SDP/profile node, e.g. the
@@ -270,21 +270,26 @@ Design knowledge that is not obvious from the code alone:
   against real hardware (a pure A2DP speaker with no microphone never has that node and never gets a
   reading; a device that has the node but no value yet still belongs in the list). List every present
   root node (`^(BTHENUM|BTHLE)\DEV_`) that clears that bar, by name, and let `ReadRawAsync` (and its
-  `Unavailable` fallback, already handled) deal with "no value yet". `ReadRawAsync` cannot resolve by
-  `FriendlyName` alone either: given the picked root name, it has to find the Bluetooth address embedded
-  in that node's `InstanceId` and then search every present node sharing that address for whichever one
-  currently carries the property. Extracting that address is not a bare 12-hex-digit regex - every
-  classic SDP node's GUID ends in the constant Bluetooth Base UUID (`...-8000-00805F9B34FB`), itself 12
-  hex digits, and matches indiscriminately across every other paired device's nodes too if not excluded.
-  The real address only ever appears immediately after `DEV_` or `&0&` (the radio-address separator
-  every child node's `InstanceId` has), so the extraction regex must anchor on one of those two
-  prefixes. Batching the battery-property lookup (`Get-PnpDeviceProperty -InstanceId <array>`) across
-  every present PnP device on the system silently returns nothing at all, confirmed directly - scope it
-  to the Bluetooth enumerators first, same as everything else here. Both scripts are C# 11 raw
-  interpolated string literals (`$$"""..."""`): a plain `{` or `}` is literal PowerShell (script blocks,
-  hashtables), only `{{...}}` interpolates a C# value, which is what makes it readable as actual
-  multi-line PowerShell with real variable names instead of an escaped, concatenated one-liner. Keep
-  writing new embedded PowerShell here the same way.
+  `Unavailable` fallback, already handled) deal with "no value yet". A read cannot resolve by
+  `FriendlyName` alone either: the level belongs to whichever node shares the name's Bluetooth address.
+  Extracting that address is not a bare 12-hex-digit regex - every classic SDP node's GUID ends in the
+  constant Bluetooth Base UUID (`...-8000-00805F9B34FB`), itself 12 hex digits, and matches
+  indiscriminately across every other paired device's nodes too if not excluded. The real address only
+  ever appears immediately after `DEV_` or `&0&` (the radio-address separator every child node's
+  `InstanceId` has), so the extraction regex must anchor on one of those two prefixes.
+  **The tree is read through cfgmgr32 (`NativeDeviceProperties`), never PowerShell.** It lists the
+  present nodes of the `BTHENUM`, `BTHHFENUM`, `BTHLE` and `BTHLEDEVICE` enumerators
+  (`CM_Get_Device_ID_ListW`, enumerator + present filter) and reads each node's name (FriendlyName,
+  else DeviceDesc, as `Get-PnpDevice` does) and level (`CM_Get_DevNode_PropertyW`); that takes tens of
+  milliseconds for every device. The PowerShell it replaced cost 3.3 s per device and per poll, six
+  devices at once took 13.5 s against the 10 s read timeout (so from about five Bluetooth devices every
+  one went stale), `Get-PnpDeviceProperty` costs about 0.3 s per node, and batched over many nodes it
+  returned values for only some of them, a different set on every run. `BluetoothPnpLevels` is the pure
+  part: `ByName` maps every named node (a manual name may be a sibling's, such as the Hands-Free AG) to
+  its device's level, BLE nodes first, names compared ignoring case as `Get-PnpDevice -FriendlyName` did;
+  `Pickable` is the picker rule above. Reads go through `BluetoothSnapshot` like macOS, so every
+  Bluetooth source of a poll shares one walk. `HardwareTests.Reads_every_bluetooth_device_in_one_poll`
+  reads them all on real hardware and fails past 5 s.
 - **macOS sources are command line tools behind the same interfaces, run through `ExternalProcess`.** Use
   absolute paths (`/usr/bin/pmset`, `/usr/sbin/system_profiler`): the plugin inherits its environment
   from the Macro Deck host. `PmsetBatteryParser` reads the first `InternalBattery` line only (no line or

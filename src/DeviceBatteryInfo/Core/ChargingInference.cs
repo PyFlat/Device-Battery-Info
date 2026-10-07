@@ -2,18 +2,15 @@ using System.Collections.Concurrent;
 
 namespace DeviceBatteryInfo.Core;
 
-// Some sources cannot tell charging from discharging (Bluetooth only reports a level), so a level that
-// keeps rising is read as charging. A reading whose source did report a state is passed through.
-// Each device is polled by one task at a time, so its state has a single writer.
+// Bluetooth only reports a level, so a level that keeps rising counts as charging.
 public sealed class ChargingInference
 {
     // Two points filter 1% jitter; a device that reports in 10% steps passes on one step.
     public const int MinRise = 2;
 
-    // How far back the lowest level is looked for when deciding a rise started.
     public static readonly TimeSpan RiseWindow = TimeSpan.FromMinutes(15);
 
-    // A charged device stops rising, and one taken off the charger may not drop a step for a while.
+    // A full device stops rising, and one off the charger may not drop a step for a while.
     public static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
 
     private readonly ConcurrentDictionary<string, State> _states = new(StringComparer.Ordinal);
@@ -69,8 +66,7 @@ public sealed class ChargingInference
                     return this with { Peak = percent, LastRise = now };
                 }
 
-                // A drop or a long stall ends it; the history restarts so the old low cannot
-                // re-trigger a rise straight away.
+                // Restarting the history keeps the old low from re-triggering straight away.
                 return percent < Peak || now - LastRise >= IdleTimeout
                     ? Start(now, percent)
                     : this;

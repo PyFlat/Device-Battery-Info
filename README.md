@@ -51,7 +51,7 @@ These work with whatever hardware of that kind you have.
 | This computer / laptop         | macOS    | `pmset -g batt`                                 | yes     | yes      |
 | This computer / laptop         | Linux    | `/sys/class/power_supply`                       | yes     | yes      |
 | Android phone                  | all      | Macro Deck's own adb connection                 | yes     | yes      |
-| Bluetooth audio device         | Windows  | PnP battery property via PowerShell             | yes     | inferred |
+| Bluetooth audio device         | Windows  | PnP battery property via cfgmgr32               | yes     | inferred |
 | Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | inferred |
 | Bluetooth device               | Linux    | BlueZ's `Battery1` over D-Bus (`busctl`)        | yes     | inferred |
 

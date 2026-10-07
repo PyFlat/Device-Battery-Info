@@ -4,12 +4,14 @@ namespace DeviceBatteryInfo.Sources.Bluetooth;
 // so each waiter then fetches for itself.
 internal sealed class BluetoothSnapshot(
     Func<CancellationToken, Task<IReadOnlyList<(string Name, string? RawBattery)>>> fetch,
-    TimeProvider? timeProvider = null
+    TimeProvider? timeProvider = null,
+    StringComparer? nameComparer = null
 ) : IDisposable
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(5);
 
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly StringComparer _names = nameComparer ?? StringComparer.Ordinal;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IReadOnlyList<(string Name, string? RawBattery)>? _devices;
     private long _timestamp;
@@ -17,7 +19,7 @@ internal sealed class BluetoothSnapshot(
     public async Task<string?> ReadRawAsync(string friendlyName, CancellationToken cancellationToken)
     {
         var devices = await GetAsync(cancellationToken);
-        return devices.FirstOrDefault(d => d.Name == friendlyName).RawBattery;
+        return devices.FirstOrDefault(d => _names.Equals(d.Name, friendlyName)).RawBattery;
     }
 
     private async Task<IReadOnlyList<(string Name, string? RawBattery)>> GetAsync(

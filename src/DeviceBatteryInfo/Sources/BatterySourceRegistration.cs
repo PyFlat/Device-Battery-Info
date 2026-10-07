@@ -26,9 +26,9 @@ internal static class BatterySourceRegistration
             services.AddSingleton<IBluetoothBatteryReader, BlueZBatteryReader>();
             services.AddSingleton<ISystemPowerReader, LinuxSystemPowerReader>();
         }
-        else
+        else if (OperatingSystem.IsWindows())
         {
-            services.AddSingleton<IBluetoothBatteryReader, PowerShellPnpBatteryReader>();
+            services.AddSingleton<IBluetoothBatteryReader, WindowsBluetoothBatteryReader>();
             services.AddSingleton<ISystemPowerReader, WindowsSystemPowerReader>();
         }
 
