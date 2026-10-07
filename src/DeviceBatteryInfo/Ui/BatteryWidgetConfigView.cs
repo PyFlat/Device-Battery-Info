@@ -15,9 +15,10 @@ internal static class BatteryWidgetConfigView
         string widgetLocalId,
         BatteryWidgetOptions current,
         IReadOnlyList<BatterySlot> devices,
-        JsonElement flows = default
+        JsonElement data = default
     )
     {
+        var flows = BatteryWidgetTypes.StoredFlows(data);
         var isPanel = widgetLocalId != BatteryWidgetTypes.TileId;
         var sourceIds = new UiState<IReadOnlyList<string>>(current.SourceIds);
         var layout = new UiState<string>(BatteryWidgetOptions.LayoutValue(current.Layout));
@@ -226,6 +227,9 @@ internal static class BatteryWidgetConfigView
                 )
             );
         }
+
+        // Macro Deck draws the border itself from the stored "border" key.
+        appearance.Add(UiWidgetAppearance.Section(data, UiWidgetAppearanceFields.Border));
 
         return new UiWidgetConfiguration
         {

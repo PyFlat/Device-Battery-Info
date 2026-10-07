@@ -148,12 +148,7 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         var options = ParseOptions(data);
         var view = new UiView(
             surface,
-            BatteryWidgetConfigView.Build(
-                localId,
-                options,
-                CurrentSlots(),
-                BatteryWidgetTypes.StoredFlows(data)
-            )
+            BatteryWidgetConfigView.Build(localId, options, CurrentSlots(), data ?? default)
         );
         return new UiViewSession(view);
     }

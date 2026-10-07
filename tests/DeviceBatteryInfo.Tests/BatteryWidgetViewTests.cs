@@ -133,6 +133,7 @@ public sealed class BatteryWidgetViewTests
     }
 
     // The host resolves a condition by the bare field id, so wrapping tabs and rows must not prefix it.
+    // Only an object input opens a scope (the border's "style" is border.style).
     [TestCase(BatteryWidgetTypes.PanelId)]
     [TestCase(BatteryWidgetTypes.TileId)]
     public void Every_visibility_condition_names_a_field_the_renderer_can_find(string widgetId)
@@ -154,10 +155,14 @@ public sealed class BatteryWidgetViewTests
         var conditions = new List<string>();
         void Walk(System.Text.Json.Nodes.JsonNode node)
         {
-            ids.Add(node["id"]!.GetValue<string>());
+            var id = node["id"]!.GetValue<string>();
+            ids.Add(id);
             if (node["properties"]?["visibleWhen"]?["parameterName"] is { } name)
             {
-                conditions.Add(name.GetValue<string>());
+                var scope = id.Contains('.', StringComparison.Ordinal)
+                    ? id[..(id.LastIndexOf('.') + 1)]
+                    : "";
+                conditions.Add(scope + name.GetValue<string>());
             }
 
             foreach (var child in node["children"]?.AsArray() ?? [])
@@ -168,7 +173,10 @@ public sealed class BatteryWidgetViewTests
 
         Walk(root);
 
-        Assert.That(ids, Does.Contain("sourceIds").And.Contain("colors").And.Contain("flows"));
+        Assert.That(
+            ids,
+            Does.Contain("sourceIds").And.Contain("colors").And.Contain("flows").And.Contain("border")
+        );
         Assert.That(conditions, Is.All.Matches<string>(ids.Contains));
         if (widgetId == BatteryWidgetTypes.PanelId)
         {

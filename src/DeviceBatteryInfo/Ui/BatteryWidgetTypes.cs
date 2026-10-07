@@ -102,6 +102,14 @@ internal static class BatteryWidgetTypes
               "type": "array",
               "description": "The actions a press runs, edited in the widget's action list."
             },
+            "border": {
+              "type": "object",
+              "properties": {
+                "style": { "type": "string" },
+                "color": { "type": "string" }
+              },
+              "description": "The border Macro Deck draws around the widget, written by the border fields and the Set Border action."
+            },
             "showNames": {
               "type": "boolean",
               "default": false,

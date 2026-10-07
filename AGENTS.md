@@ -199,6 +199,11 @@ Design knowledge that is not obvious from the code alone:
   from the stored data, and allowed by the `DataSchema`, whose `additionalProperties: false` would
   otherwise reject it). Without an `Editor` region the desktop draws the properties as one full-width
   pane, which looks stretched.
+- **Macro Deck draws the widget border, not the plugin.** The host draws the ring around any widget
+  from the stored `border` key (`{ "style", "color" }`), so the config form only adds
+  `UiWidgetAppearance.Section(data, UiWidgetAppearanceFields.Border)` and the `DataSchema` must allow
+  `border`. Other appearance values (background, label colour) are drawn by the plugin itself. The
+  section's colour field is conditioned on `style` inside the `border` object scope (`border.style`).
 - **Widget previews:** `Ui/BatteryWidgetPreviews.cs` has one `static` parameterless method per
   scenario, each `[UiPreview(name, View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]`
   returning a `UiElement`. `UiPreviewCatalog.Scan` (run by the hosting `ui` capability over the
