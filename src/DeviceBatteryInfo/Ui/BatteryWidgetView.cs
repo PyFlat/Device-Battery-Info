@@ -27,6 +27,14 @@ internal static class BatteryWidgetView
     // Small enough that "100%" clears the ring's inner circle.
     private const double FaceGlyph = 0.28;
     private const double FaceGlyphAlone = 0.44;
+
+    // With the name inside, the glyph gives up height; the name line stays within the inner circle's
+    // chord at the bottom of the face.
+    private const double FaceGlyphNamed = 0.19;
+    private const double FaceGlyphNamedAlone = 0.3;
+    private const double FaceName = 0.11;
+    private const double FaceNameMin = 0.075;
+    private const double FaceNameWidth = 0.46;
     private const double FacePercent = 0.16;
     private const double NameShare = 0.24;
     private const double TrendShare = 0.19;
@@ -224,7 +232,7 @@ internal static class BatteryWidgetView
                 state.Value.Rows.Count,
                 aspect,
                 hasTitle,
-                state.Value.Options.ShowNames,
+                state.Value.Options.ShowNames && !state.Value.Options.NameInRing,
                 state.Value.Options.ShowRingTrend
             );
 
@@ -289,12 +297,19 @@ internal static class BatteryWidgetView
         Func<double> diameter
     )
     {
+        var nameInside = options.ShowNames && options.NameInRing;
         var children = new List<UiElement>
         {
-            Ring(row, options, diameter, showPercent: options.ShowPercent),
+            Ring(
+                row,
+                options,
+                diameter,
+                showPercent: options.ShowPercent,
+                innerName: nameInside ? row.Name : null
+            ),
         };
 
-        if (options.ShowNames)
+        if (options.ShowNames && !nameInside)
         {
             children.Add(
                 new UiTextRun
@@ -350,7 +365,8 @@ internal static class BatteryWidgetView
         BatteryWidgetRow row,
         BatteryWidgetOptions options,
         Func<double> room,
-        bool showPercent
+        bool showPercent,
+        string? innerName = null
     )
     {
         var scale = options.RingScale;
@@ -398,6 +414,7 @@ internal static class BatteryWidgetView
             );
         }
 
+        var nameInside = innerName is not null;
         var face = new List<UiElement>
         {
             Glyph(
@@ -405,7 +422,13 @@ internal static class BatteryWidgetView
                 DeviceGlyphs.For(row.Kind),
                 color,
                 diameter,
-                showPercent ? FaceGlyph : FaceGlyphAlone
+                (showPercent, nameInside) switch
+                {
+                    (true, true) => FaceGlyphNamed,
+                    (false, true) => FaceGlyphNamedAlone,
+                    (true, false) => FaceGlyph,
+                    _ => FaceGlyphAlone,
+                }
             ),
         };
         if (showPercent)
@@ -422,6 +445,35 @@ internal static class BatteryWidgetView
                     Align = UiComponentAlignments.Center,
                     MaxLines = 1,
                     Wrap = false,
+                }
+            );
+        }
+
+        // The bottom line is where the inner circle is narrowest, so the name gets a capped width
+        // and shrinks before it truncates.
+        if (innerName is not null)
+        {
+            face.Add(
+                new UiModifier
+                {
+                    Key = "name-slot",
+                    Frame = UiValue.From(() => new UiFrame
+                    {
+                        MaxWidth = UiLength.OfBasis(FaceNameWidth * diameter()),
+                    }),
+                    Child = new UiTextRun
+                    {
+                        Key = "name",
+                        Text = innerName,
+                        Size = OfDiameter(diameter, FaceName),
+                        MinSize = OfDiameter(diameter, FaceNameMin),
+                        Weight = UiComponentTextWeights.Medium,
+                        Role = UiComponentTextRoles.Secondary,
+                        Color = TextColor(options, UiComponentTextRoles.Secondary),
+                        Align = UiComponentAlignments.Center,
+                        MaxLines = 1,
+                        Wrap = false,
+                    },
                 }
             );
         }
@@ -698,26 +750,39 @@ internal static class BatteryWidgetView
     private static UiStack TileStacked(BatteryWidgetRow row, BatteryWidgetOptions options)
     {
         var caption = Caption(row, options);
+        var nameInside = options.NameInRing;
         // Leaves room below the ring for the name line, and for the caption line when there is one.
-        var diameter = 1 - (2 * EdgeInset) - 0.13 - (caption is null ? 0 : 0.1);
+        var diameter =
+            1 - (2 * EdgeInset) - (nameInside ? 0 : 0.13) - (caption is null ? 0 : 0.1);
 
         var children = new List<UiElement>
         {
-            Ring(row, options, () => diameter, options.ShowPercent),
-            new UiTextRun
-            {
-                Key = "name",
-                Text = row.Name,
-                Size = UiSize.FromBasis(0.1, 0.9),
-                MinSize = 0.055,
-                Role = UiComponentTextRoles.Secondary,
-                Color = TextColor(options, UiComponentTextRoles.Secondary),
-                Weight = UiComponentTextWeights.Medium,
-                MaxLines = 1,
-                Wrap = false,
-                Align = UiComponentAlignments.Center,
-            },
+            Ring(
+                row,
+                options,
+                () => diameter,
+                options.ShowPercent,
+                innerName: nameInside ? row.Name : null
+            ),
         };
+        if (!nameInside)
+        {
+            children.Add(
+                new UiTextRun
+                {
+                    Key = "name",
+                    Text = row.Name,
+                    Size = UiSize.FromBasis(0.1, 0.9),
+                    MinSize = 0.055,
+                    Role = UiComponentTextRoles.Secondary,
+                    Color = TextColor(options, UiComponentTextRoles.Secondary),
+                    Weight = UiComponentTextWeights.Medium,
+                    MaxLines = 1,
+                    Wrap = false,
+                    Align = UiComponentAlignments.Center,
+                }
+            );
+        }
 
         if (caption is { } captionText)
         {

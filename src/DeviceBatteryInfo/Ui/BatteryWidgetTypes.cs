@@ -60,7 +60,7 @@ internal static class BatteryWidgetTypes
             : default;
 
     private const string DefaultData =
-        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100}""";
+        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100,"namePosition":"below"}""";
 
     private const string Schema = """
         {
@@ -89,6 +89,12 @@ internal static class BatteryWidgetTypes
               "maximum": 100,
               "default": 100,
               "description": "The ring's size in percent of the room it has. The list layout has no ring."
+            },
+            "namePosition": {
+              "type": "string",
+              "enum": ["below", "inside"],
+              "default": "below",
+              "description": "Where a ring shows the device name: on a line below it, or inside it under the percentage. The panel shows names only with showNames."
             },
             "sort": {
               "type": "string",

@@ -200,7 +200,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(18));
+        Assert.That(ours, Has.Length.EqualTo(20));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(
@@ -294,6 +294,57 @@ public sealed class BatteryWidgetViewTests
             Assert.That(RingFrame(100)?["maxWidth"], Is.Null);
             Assert.That(RingFrame(60)?["maxWidth"], Is.Not.Null);
             Assert.That(RingFrame(60)?["maxHeight"], Is.Not.Null);
+        }
+    }
+
+    [TestCase(BatteryWidgetTypes.TileId)]
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    public void The_name_moves_into_the_ring_and_leaves_no_line_below(string widgetId)
+    {
+        var model =
+            widgetId == BatteryWidgetTypes.TileId
+                ? BatteryWidgetSamples.TileDischarging()
+                : BatteryWidgetSamples.PanelNamed();
+
+        List<string> NameIds(BatteryNamePosition position)
+        {
+            var ids = new List<string>();
+            void Walk(System.Text.Json.Nodes.JsonNode node)
+            {
+                var id = node["id"]!.GetValue<string>();
+                // The wide tile names the device beside its ring, in either position.
+                if (
+                    id.EndsWith(".name", StringComparison.Ordinal)
+                    && !id.Contains(".wide.", StringComparison.Ordinal)
+                )
+                {
+                    ids.Add(id);
+                }
+
+                foreach (var child in node["children"]?.AsArray() ?? [])
+                {
+                    Walk(child!);
+                }
+            }
+
+            Walk(
+                TreeJson(
+                    widgetId,
+                    model with
+                    {
+                        Options = model.Options with { NamePosition = position },
+                    }
+                )
+            );
+            return ids;
+        }
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(NameIds(BatteryNamePosition.Below), Is.Not.Empty);
+            Assert.That(NameIds(BatteryNamePosition.Below), Has.None.Contains(".ring."));
+            Assert.That(NameIds(BatteryNamePosition.Inside), Is.Not.Empty);
+            Assert.That(NameIds(BatteryNamePosition.Inside), Is.All.Contains(".ring."));
         }
     }
 

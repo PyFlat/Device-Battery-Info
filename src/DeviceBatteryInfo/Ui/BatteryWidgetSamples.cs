@@ -278,6 +278,28 @@ internal static class BatteryWidgetSamples
             Options = PanelNamed().Options with { RingSize = 70 },
         };
 
+    public static BatteryWidgetModel TileNameInRing() =>
+        new(
+            [
+                Row(
+                    "controller",
+                    "DualSense Controller",
+                    64,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Controller,
+                    charging: true,
+                    trend: "+28%/30m"
+                ),
+            ],
+            BatteryWidgetOptions.Default with { NamePosition = BatteryNamePosition.Inside }
+        );
+
+    public static BatteryWidgetModel PanelNamesInRings() =>
+        PanelNamed() with
+        {
+            Options = PanelNamed().Options with { NamePosition = BatteryNamePosition.Inside },
+        };
+
     private static BatteryWidgetRow Row(
         string id,
         string name,

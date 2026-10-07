@@ -137,6 +137,13 @@ internal enum BatteryListAlignment
     Bottom,
 }
 
+internal enum BatteryNamePosition
+{
+    Below,
+
+    Inside,
+}
+
 internal enum BatterySortMode
 {
     Manual,
@@ -165,9 +172,21 @@ internal sealed record BatteryWidgetOptions(
     bool ShowRingTrend = false,
     string? BackgroundColor = null,
     string? TextColor = null,
-    int RingSize = BatteryWidgetOptions.MaxRingSize
+    int RingSize = BatteryWidgetOptions.MaxRingSize,
+    BatteryNamePosition NamePosition = BatteryNamePosition.Below
 )
 {
+    public const string NameBelow = "below";
+    public const string NameInside = "inside";
+
+    public static BatteryNamePosition ParseNamePosition(string? value) =>
+        value == NameInside ? BatteryNamePosition.Inside : BatteryNamePosition.Below;
+
+    public static string NamePositionValue(BatteryNamePosition position) =>
+        position == BatteryNamePosition.Inside ? NameInside : NameBelow;
+
+    public bool NameInRing => NamePosition == BatteryNamePosition.Inside;
+
     public const int MinRingSize = 50;
     public const int MaxRingSize = 100;
 

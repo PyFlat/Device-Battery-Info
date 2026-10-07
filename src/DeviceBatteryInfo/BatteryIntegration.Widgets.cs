@@ -292,6 +292,12 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 )
                 : BatteryWidgetOptions.MaxRingSize;
 
+        var namePosition =
+            obj.TryGetProperty("namePosition", out var namePositionValue)
+            && namePositionValue.ValueKind == JsonValueKind.String
+                ? BatteryWidgetOptions.ParseNamePosition(namePositionValue.GetString())
+                : BatteryNamePosition.Below;
+
         var appearance = UiWidgetAppearance.Read(obj);
 
         return new BatteryWidgetOptions(
@@ -311,7 +317,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             Flag("showRingTrend", false),
             NonEmpty(appearance.BackgroundColor),
             NonEmpty(appearance.LabelColor),
-            ringSize
+            ringSize,
+            namePosition
         );
     }
 

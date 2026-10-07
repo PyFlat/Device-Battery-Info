@@ -165,6 +165,11 @@ Design knowledge that is not obvious from the code alone:
   The ring fills its slot and the diameter only sizes its parts, so `ringSize` (50-100 %, default
   100) shrinks a ring by capping its frame (`MaxWidth`/`MaxHeight`) at the scaled diameter and sizing
   the parts from that; at 100 % the frame stays uncapped, so existing widgets render as before.
+  `namePosition: "inside"` puts the name in the face under the percentage (the panel only with
+  `showNames`): the glyph shrinks (`FaceGlyphNamed`), and the name sits in a `UiModifier` whose
+  `MaxWidth` keeps its corners within the inner circle's chord at the bottom of the face, with a
+  `MinSize` so a long name shrinks before it truncates. The line below the ring goes, and the stacked
+  tile and `Arrange` give its room back to the ring. The wide tile keeps the name in its details.
   Every `UiLength` is a fraction of the whole widget's basis, never of a grid cell, so the ring panel
   estimates its ring diameter (`BatteryWidgetView.Arrange`: the column count that gives the largest
   ring for the device count and aspect) and sizes each ring's parts reactively from that; a

@@ -127,6 +127,21 @@ internal static class BatteryWidgetPreviews
     )]
     public static UiElement PanelSmallRings() => PanelOf(BatteryWidgetSamples.PanelSmallRings());
 
+    [UiPreview(
+        "Tile - name in ring",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileNameInRing() => TileOf(BatteryWidgetSamples.TileNameInRing());
+
+    [UiPreview(
+        "Panel - names in rings",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelNamesInRings() =>
+        PanelOf(BatteryWidgetSamples.PanelNamesInRings());
+
     private static UiElement PanelOf(BatteryWidgetModel model) =>
         BatteryWidgetView.Build(
             BatteryWidgetTypes.PanelId,

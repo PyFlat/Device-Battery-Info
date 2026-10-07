@@ -218,6 +218,15 @@
     <data name="Widgets.Config.RingSize.Label" xml:space="preserve">
         <value>Ring size (%)</value>
     </data>
+    <data name="Widgets.Config.NamePosition.Label" xml:space="preserve">
+        <value>Device name</value>
+    </data>
+    <data name="Widgets.Config.NamePosition.Below" xml:space="preserve">
+        <value>Below ring</value>
+    </data>
+    <data name="Widgets.Config.NamePosition.Inside" xml:space="preserve">
+        <value>In ring</value>
+    </data>
 
     <data name="ConfigFlow.Device.Title" xml:space="preserve">
         <value>Add a battery device</value>
