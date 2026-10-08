@@ -300,6 +300,44 @@ internal static class BatteryWidgetSamples
             Options = PanelNamed().Options with { NamePosition = BatteryNamePosition.Inside },
         };
 
+    public static BatteryWidgetModel PanelMonochrome() =>
+        new(
+            [
+                Row("mouse", "MX Master", 85, BatteryStatus.Discharging, BatterySourceKind.Mouse),
+                Row("phone", "LG Wing", 96, BatteryStatus.Discharging, BatterySourceKind.Phone),
+                Row(
+                    "tablet",
+                    "Tab S7",
+                    77,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Tablet,
+                    charging: true
+                ),
+                Row("buds", "Galaxy Buds", 12, BatteryStatus.Discharging, BatterySourceKind.Earbuds),
+                Row("headset", "Quest 2", 92, BatteryStatus.Discharging, BatterySourceKind.Headset, stale: true),
+                Row("controller", "Xbox", 70, BatteryStatus.Discharging, BatterySourceKind.Controller),
+            ],
+            BatteryWidgetOptions.Default with
+            {
+                ShowNames = true,
+                Colors = BatteryColorScheme.Custom,
+                BackgroundColor = "#000000",
+                TextColor = "#FFFFFF",
+            }
+        );
+
+    public static BatteryWidgetModel TileMonochromeLow() =>
+        new(
+            [Row("buds", "Galaxy Buds", 12, BatteryStatus.Discharging, BatterySourceKind.Earbuds)],
+            BatteryWidgetOptions.Default with
+            {
+                Colors = BatteryColorScheme.Custom,
+                LowInRed = false,
+                BackgroundColor = "#000000",
+                TextColor = "#FFFFFF",
+            }
+        );
+
     private static BatteryWidgetRow Row(
         string id,
         string name,

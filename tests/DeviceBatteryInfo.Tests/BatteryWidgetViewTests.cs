@@ -200,7 +200,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(20));
+        Assert.That(ours, Has.Length.EqualTo(22));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(
@@ -599,6 +599,26 @@ public sealed class BatteryWidgetViewTests
                 Assert.That(R("a", null).Color(20, scheme), Is.EqualTo(BatteryWidgetRow.Grey));
                 Assert.That(R("a", 80).Color(20, scheme), Does.Match("^#[0-9A-F]{6}$"));
             }
+        }
+    }
+
+    [Test]
+    public void The_custom_scheme_uses_its_colour_and_can_leave_a_low_level_uncoloured()
+    {
+        const BatteryColorScheme custom = BatteryColorScheme.Custom;
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(R("a", 80).Color(20, custom, "#ffffff"), Is.EqualTo("#FFFFFF"));
+            Assert.That(R("a", 80, charging: true).Color(20, custom, "#12AB34"), Is.EqualTo("#12AB34"));
+            Assert.That(R("a", 80).Color(20, custom, "white"), Is.EqualTo(BatteryWidgetRow.White));
+            Assert.That(R("a", 12).Color(20, custom, "#FFFFFF"), Is.EqualTo(BatteryWidgetRow.Red));
+            Assert.That(R("a", 12).Color(20, custom, "#FFFFFF", lowInRed: false), Is.EqualTo("#FFFFFF"));
+            Assert.That(
+                R("a", 60, stale: true).Color(20, custom, "#FFFFFF", lowInRed: false),
+                Is.EqualTo(BatteryWidgetRow.Grey)
+            );
+            // The switch belongs to the custom scheme only.
+            Assert.That(R("a", 12).Color(20, BatteryColorScheme.Simple, lowInRed: false), Is.EqualTo(BatteryWidgetRow.Red));
         }
     }
 

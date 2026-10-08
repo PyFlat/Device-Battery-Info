@@ -160,7 +160,8 @@ Design knowledge that is not obvious from the code alone:
   1 there and it disappears). `BatteryWidgetViewTests` checks every path against the renderer's
   grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
   colour (`BatteryWidgetRow.Color` for the widget's `colors` scheme, all Apple system colours so every
-  scheme has the same saturation; every scheme shows a level at or below the threshold in red even
+  scheme has the same saturation, plus `custom`, one `ringColor` whose `lowInRed` switch is the only
+  way to drop the red; every scheme shows a level at or below the threshold in red even
   while charging and a stale or unknown one in grey) and the percentage uses the primary text role. A ring is a full-turn `UiGauge`
   inside a `UiModifier` with `Frame.AspectRatio = 1` and a `UiLayer` for the gauge, the bolt and the
   face; the gauge is inset by half the bolt's height minus half its stroke, which puts a charging

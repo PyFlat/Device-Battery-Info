@@ -21,8 +21,9 @@ peripherals, right on your deck.
 (level ring or bar, percentage, charging indicator, time to full, battery trend, low-battery threshold).
 Each device is drawn with an icon for its kind and a coloured ring, with a bolt in the ring's gap while it
 charges. The colour scheme is a widget setting: by level with cyan while charging (the default), by
-level only, green only, by device type, or a smooth gradient. In every scheme a level at or below the
-low-battery threshold is red, even while charging:
+level only, green only, by device type, a smooth gradient, or one custom colour of your choice (for
+a black and white board, say). In every scheme a level at or below the low-battery threshold is red,
+even while charging; only the custom colour lets you switch that off:
 
 - **Battery panel** shows several devices at once, as a grid of rings that arranges itself to the
   widget's size (optionally with names), or as a list of rows with bars aligned to the top, centre or

@@ -185,6 +185,15 @@
     <data name="Widgets.Config.Colors.Gradient" xml:space="preserve">
         <value>Gradient</value>
     </data>
+    <data name="Widgets.Config.Colors.Custom" xml:space="preserve">
+        <value>Custom colour</value>
+    </data>
+    <data name="Widgets.Config.RingColor.Label" xml:space="preserve">
+        <value>Ring colour</value>
+    </data>
+    <data name="Widgets.Config.LowInRed.Label" xml:space="preserve">
+        <value>Low battery in red</value>
+    </data>
     <data name="Widgets.Config.ListAlign.Label" xml:space="preserve">
         <value>Row alignment</value>
     </data>

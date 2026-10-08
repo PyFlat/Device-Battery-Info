@@ -142,6 +142,20 @@ internal static class BatteryWidgetPreviews
     public static UiElement PanelNamesInRings() =>
         PanelOf(BatteryWidgetSamples.PanelNamesInRings());
 
+    [UiPreview(
+        "Panel - black and white",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelMonochrome() => PanelOf(BatteryWidgetSamples.PanelMonochrome());
+
+    [UiPreview(
+        "Tile - black and white, low not red",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileMonochromeLow() => TileOf(BatteryWidgetSamples.TileMonochromeLow());
+
     private static UiElement PanelOf(BatteryWidgetModel model) =>
         BatteryWidgetView.Build(
             BatteryWidgetTypes.PanelId,

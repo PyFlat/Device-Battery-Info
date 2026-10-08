@@ -37,6 +37,8 @@ internal static class BatteryWidgetConfigView
         var sort = new UiState<string>(BatteryWidgetOptions.SortValue(current.Sort));
         var title = new UiState<string>(current.Title);
         var colors = new UiState<string>(BatteryWidgetOptions.ColorsValue(current.Colors));
+        var ringColor = new UiState<string>(current.RingColor);
+        var lowInRed = new UiState<bool>(current.LowInRed);
         var listAlign = new UiState<string>(
             BatteryWidgetOptions.ListAlignValue(current.ListAlign)
         );
@@ -172,10 +174,32 @@ internal static class BatteryWidgetConfigView
                     (BatteryWidgetOptions.ColorsLevels, Strings.Widgets.Config.Colors.Levels()),
                     (BatteryWidgetOptions.ColorsSimple, Strings.Widgets.Config.Colors.Simple()),
                     (BatteryWidgetOptions.ColorsDevice, Strings.Widgets.Config.Colors.Device()),
-                    (BatteryWidgetOptions.ColorsGradient, Strings.Widgets.Config.Colors.Gradient())
+                    (BatteryWidgetOptions.ColorsGradient, Strings.Widgets.Config.Colors.Gradient()),
+                    (BatteryWidgetOptions.ColorsCustom, Strings.Widgets.Config.Colors.Custom())
                 ),
                 Binding = Bind.To(colors),
             }
+        );
+
+        var onlyCustom = UiValue.Of(
+            new UiVisibleWhen
+            {
+                ParameterName = "colors",
+                Values = [BatteryWidgetOptions.ColorsCustom],
+                SiblingValue = () => colors.Value,
+            }
+        );
+        appearance.Add(
+            new UiColorInput
+            {
+                Key = "ringColor",
+                Label = Strings.Widgets.Config.RingColor.Label(),
+                Binding = Bind.To(ringColor),
+                VisibleWhen = onlyCustom,
+            }
+        );
+        appearance.Add(
+            Toggle("lowInRed", Strings.Widgets.Config.LowInRed.Label(), lowInRed, onlyCustom)
         );
         appearance.Add(
             new UiNumberInput

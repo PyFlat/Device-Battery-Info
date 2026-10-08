@@ -302,6 +302,13 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 ? BatteryWidgetOptions.ParseNamePosition(namePositionValue.GetString())
                 : BatteryNamePosition.Below;
 
+        var ringColor =
+            obj.TryGetProperty("ringColor", out var ringColorValue)
+            && ringColorValue.ValueKind == JsonValueKind.String
+            && BatteryWidgetRow.IsHexColor(ringColorValue.GetString())
+                ? ringColorValue.GetString()!.ToUpperInvariant()
+                : BatteryWidgetRow.White;
+
         var appearance = UiWidgetAppearance.Read(obj);
 
         return new BatteryWidgetOptions(
@@ -322,7 +329,9 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             NonEmpty(appearance.BackgroundColor),
             NonEmpty(appearance.LabelColor),
             ringSize,
-            namePosition
+            namePosition,
+            ringColor,
+            Flag("lowInRed", true)
         );
     }
 

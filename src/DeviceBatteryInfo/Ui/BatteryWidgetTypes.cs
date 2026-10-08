@@ -60,7 +60,7 @@ internal static class BatteryWidgetTypes
             : default;
 
     private const string DefaultData =
-        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100,"namePosition":"below"}""";
+        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100,"namePosition":"below","ringColor":"#FFFFFF","lowInRed":true}""";
 
     private const string Schema = """
         {
@@ -110,9 +110,19 @@ internal static class BatteryWidgetTypes
             },
             "colors": {
               "type": "string",
-              "enum": ["levels-charging", "levels", "simple", "device", "gradient"],
+              "enum": ["levels-charging", "levels", "simple", "device", "gradient", "custom"],
               "default": "levels-charging",
-              "description": "Ring and bar colours. Every scheme shows a level at or below lowThreshold in red."
+              "description": "Ring and bar colours. Every scheme shows a level at or below lowThreshold in red, except 'custom' with lowInRed off."
+            },
+            "ringColor": {
+              "type": "string",
+              "default": "#FFFFFF",
+              "description": "The ring, icon and bar colour of the 'custom' scheme, #rrggbb."
+            },
+            "lowInRed": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the 'custom' scheme still shows a level at or below lowThreshold in red."
             },
             "listAlign": {
               "type": "string",

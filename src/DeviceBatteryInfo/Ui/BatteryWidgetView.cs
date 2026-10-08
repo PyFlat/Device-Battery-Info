@@ -81,9 +81,9 @@ internal static class BatteryWidgetView
 
         if (
             role == UiComponentTextRoles.Primary
-            || !IsOpaqueHex(color)
+            || !BatteryWidgetRow.IsHexColor(color)
             || options.BackgroundColor is not { } background
-            || !IsOpaqueHex(background)
+            || !BatteryWidgetRow.IsHexColor(background)
         )
         {
             return UiValue.Of(color);
@@ -116,8 +116,6 @@ internal static class BatteryWidgetView
     private static string PercentRole(BatteryWidgetRow row) =>
         row.Stale ? UiComponentTextRoles.Muted : UiComponentTextRoles.Primary;
 
-    private static bool IsOpaqueHex(string color) =>
-        color.Length == 7 && color[0] == '#' && color.Skip(1).All(char.IsAsciiHexDigit);
 
     private static UiStack Panel(UiState<BatteryWidgetModel> state, int cornerRadius)
     {
@@ -371,7 +369,7 @@ internal static class BatteryWidgetView
     {
         var scale = options.RingScale;
         Func<double> diameter = scale < 1 ? () => room() * scale : room;
-        var color = row.Color(options.LowThreshold, options.Colors);
+        var color = row.Color(options);
         var charging = options.ShowCharging && row.Charging;
         var gap = charging ? ChargingGapDegrees : 0;
 
@@ -594,7 +592,7 @@ internal static class BatteryWidgetView
         bool inline
     )
     {
-        var color = row.Color(options.LowThreshold, options.Colors);
+        var color = row.Color(options);
         var caption = Caption(row, options);
 
         // Shrinking would count as fitting, so the inline texts keep their size and truncate instead.
