@@ -17,7 +17,7 @@ internal sealed class AdbBatterySource(
 
     public string DisplayName { get; } = slot.DisplayName;
 
-    public BatterySourceKind Kind => BatterySourceKind.Phone;
+    public BatterySourceKind Kind { get; } = slot.Kind;
 
     public async ValueTask<BatteryReading> ReadAsync(CancellationToken cancellationToken)
     {

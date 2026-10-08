@@ -314,7 +314,7 @@ internal static class BatteryWidgetSamples
                     charging: true
                 ),
                 Row("buds", "Galaxy Buds", 12, BatteryStatus.Discharging, BatterySourceKind.Earbuds),
-                Row("headset", "Quest 2", 92, BatteryStatus.Discharging, BatterySourceKind.Headset, stale: true),
+                Row("headset", "Quest 2", 92, BatteryStatus.Discharging, BatterySourceKind.VrHeadset, stale: true),
                 Row("controller", "Xbox", 70, BatteryStatus.Discharging, BatterySourceKind.Controller),
             ],
             BatteryWidgetOptions.Default with

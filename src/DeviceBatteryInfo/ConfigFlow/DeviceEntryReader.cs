@@ -57,7 +57,10 @@ internal static class DeviceEntryReader
                     DeviceType.Bluetooth => new BatterySlot(
                         id,
                         name,
-                        DeviceConfigKeys.ParseKind(await Read(DeviceConfigKeys.BluetoothKind)),
+                        DeviceConfigKeys.ParseKind(
+                            await Read(DeviceConfigKeys.Kind)
+                                ?? await Read(DeviceConfigKeys.LegacyBluetoothKind)
+                        ),
                         DeviceType.Bluetooth,
                         BluetoothFriendlyName: await Read(DeviceConfigKeys.BluetoothName)
                     ),
@@ -71,7 +74,9 @@ internal static class DeviceEntryReader
                     _ => new BatterySlot(
                         id,
                         name,
-                        BatterySourceKind.Phone,
+                        await Read(DeviceConfigKeys.Kind) is { } kind
+                            ? DeviceConfigKeys.ParseKind(kind)
+                            : BatterySourceKind.Phone,
                         DeviceType.AdbPhone,
                         AdbAddress: (await Read(DeviceConfigKeys.AdbAddress))?.Trim()
                     ),

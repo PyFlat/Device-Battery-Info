@@ -96,7 +96,11 @@ public sealed class DeviceEntryReaderTests
         Assert.That(slots.Select(s => s.Id), Is.EqualTo(["phone", "buds", "mouse"]));
 
         var phone = slots.Single(s => s.Type == DeviceType.AdbPhone);
-        Assert.That(phone.AdbAddress, Is.EqualTo("10.0.0.9:5555"));
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(phone.AdbAddress, Is.EqualTo("10.0.0.9:5555"));
+            Assert.That(phone.Kind, Is.EqualTo(BatterySourceKind.Phone));
+        }
 
         var buds = slots.Single(s => s.Type == DeviceType.Bluetooth);
         using (Assert.EnterMultipleScope())
@@ -111,6 +115,43 @@ public sealed class DeviceEntryReaderTests
             Assert.That(mouse.CatalogDeviceId, Is.EqualTo("razer-deathadder-v3-pro"));
             Assert.That(mouse.Kind, Is.EqualTo(BatterySourceKind.Mouse));
         }
+    }
+
+    [Test]
+    public async Task A_stored_kind_sets_the_icon_of_adb_and_bluetooth_devices()
+    {
+        var config = new FakeConfig(
+            (
+                Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                "Quest",
+                new()
+                {
+                    ["type"] = "adb-phone",
+                    ["name"] = "Quest",
+                    ["adbAddress"] = "10.0.0.9:5555",
+                    ["kind"] = "vr-headset",
+                }
+            ),
+            (
+                Guid.Parse("00000000-0000-0000-0000-000000000002"),
+                "Go 4",
+                new()
+                {
+                    ["type"] = "bluetooth",
+                    ["name"] = "Go 4",
+                    ["bluetoothName"] = "JBL Go 4",
+                    ["kind"] = "speaker",
+                    ["bluetoothKind"] = "headset",
+                }
+            )
+        );
+
+        var slots = await DeviceEntryReader.ReadAsync(config, TestModels.Catalog(), CancellationToken.None);
+
+        Assert.That(
+            slots.Select(s => s.Kind),
+            Is.EqualTo([BatterySourceKind.VrHeadset, BatterySourceKind.Speaker])
+        );
     }
 
     [Test]

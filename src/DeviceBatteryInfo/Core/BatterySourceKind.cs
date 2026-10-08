@@ -13,4 +13,6 @@ public enum BatterySourceKind
     Tablet,
     Controller,
     Pen,
+    Speaker,
+    VrHeadset,
 }

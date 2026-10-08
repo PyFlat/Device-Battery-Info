@@ -330,6 +330,48 @@ public sealed class DeviceConfigFlowTests
     }
 
     [Test]
+    public async Task An_adb_device_keeps_the_icon_picked_for_it()
+    {
+        var result = await RunAsync(
+            Flow(),
+            basics: new() { ["name"] = "Quest", ["category"] = "adb-phone" },
+            details: new() { ["adbAddress"] = "1.2.3.4:5555", ["kind"] = "vr-headset" }
+        );
+
+        Assert.That(result.Values!["kind"].Value, Is.EqualTo("vr-headset"));
+    }
+
+    [Test]
+    public async Task Editing_an_adb_device_pre_selects_its_icon()
+    {
+        var devices = new[]
+        {
+            new BatterySlot(
+                "tab",
+                "Tab",
+                BatterySourceKind.Tablet,
+                DeviceType.AdbPhone,
+                AdbAddress: "10.0.0.6:5555"
+            ),
+        };
+        var flow = Flow(devices);
+        var context = new FakeContext("Tab");
+
+        await flow.StartAsync(context, CancellationToken.None);
+        var details = await flow.SubmitAsync(
+            "basics",
+            new Dictionary<string, object?>(),
+            context,
+            CancellationToken.None
+        );
+
+        Assert.That(
+            details.NextStep!.Fields.First(f => f.Name == "kind").DefaultValue,
+            Is.EqualTo("tablet")
+        );
+    }
+
+    [Test]
     public async Task A_valid_phone_completes_with_only_its_own_values()
     {
         var result = await RunAsync(
@@ -344,6 +386,7 @@ public sealed class DeviceConfigFlowTests
             Assert.That(result.EntryTitle, Is.EqualTo("My Phone"));
             Assert.That(result.Values!["type"].Value, Is.EqualTo("adb-phone"));
             Assert.That(result.Values!["adbAddress"].Value, Is.EqualTo("1.2.3.4:5555"));
+            Assert.That(result.Values!["kind"].Value, Is.EqualTo("phone"));
             Assert.That(result.Values!.Keys, Does.Not.Contain("adbExecutable"));
             Assert.That(result.Values!.Keys, Does.Not.Contain("bluetoothName"));
         }

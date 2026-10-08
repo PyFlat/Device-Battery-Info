@@ -39,6 +39,8 @@ internal sealed record BatteryWidgetRow(
         [BatterySourceKind.Earbuds] = "#00C7BE",
         [BatterySourceKind.Controller] = Yellow,
         [BatterySourceKind.Pen] = "#A2845E",
+        [BatterySourceKind.Speaker] = "#30B0C7",
+        [BatterySourceKind.VrHeadset] = "#FF2D55",
         [BatterySourceKind.Other] = Green,
     };
 

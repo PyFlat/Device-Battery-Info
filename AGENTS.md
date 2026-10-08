@@ -328,6 +328,9 @@ Design knowledge that is not obvious from the code alone:
   with the Bluetooth picker: a list when something is attached, a text field when nothing is or an
   existing entry is being edited, plus a manual override field. Tests use `FakeAndroidDeviceManager`
   from `MacroDeck.Plugin.Testing`.
+  An adb device is not always a phone (a tablet, a Quest), so adb and Bluetooth entries share one icon
+  choice stored under `kind` (default phone for adb, headset for Bluetooth); Bluetooth entries saved
+  before that keep theirs under `bluetoothKind`, which the reader still falls back to.
 - **A device is a model in a device family, and a family is one file.** `IDeviceFamily` (in
   `Sources/DeviceFamily.cs`) is a protocol plus its `DeviceModel`s. A new model in an existing family is
   one line in that family's `Devices`/`Models`; a new protocol is one class: a `HidProtocol` for a USB
