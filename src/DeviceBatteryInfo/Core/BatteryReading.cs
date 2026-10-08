@@ -12,6 +12,9 @@ public sealed record BatteryReading
 
     public TimeSpan? TimeToEmpty { get; init; }
 
+    // Status is the source's guess, so ChargingInference may replace it.
+    public bool StatusIsAssumed { get; init; }
+
     public bool IsCharging => Status is BatteryStatus.Charging;
 
     public bool HasValue => Percent is not null || Status is not BatteryStatus.Unknown;

@@ -23,7 +23,8 @@ public sealed class AdbBatterySourceTests
                 BatterySourceKind.Phone,
                 DeviceType.AdbPhone,
                 AdbAddress: address
-            )
+            ),
+            new SemaphoreSlim(2, 2)
         );
 
     [Test]

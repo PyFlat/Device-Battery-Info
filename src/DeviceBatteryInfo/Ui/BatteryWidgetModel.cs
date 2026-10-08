@@ -42,9 +42,17 @@ internal sealed record BatteryWidgetRow(
         [BatterySourceKind.Other] = Green,
     };
 
+    public const string White = "#FFFFFF";
+
+    public string Color(BatteryWidgetOptions options) =>
+        Color(options.LowThreshold, options.Colors, options.RingColor, options.LowInRed);
+
+    // Shapes take a hex only, so a custom colour that is not #rrggbb falls back to white.
     public string Color(
         int lowThreshold,
-        BatteryColorScheme scheme = BatteryColorScheme.LevelsCharging
+        BatteryColorScheme scheme = BatteryColorScheme.LevelsCharging,
+        string? customColor = null,
+        bool lowInRed = true
     )
     {
         if (Stale || Percent is not { } percent)
@@ -52,13 +60,15 @@ internal sealed record BatteryWidgetRow(
             return Grey;
         }
 
-        if (percent <= lowThreshold)
+        var custom = IsHexColor(customColor) ? customColor!.ToUpperInvariant() : White;
+        if (percent <= lowThreshold && (lowInRed || scheme != BatteryColorScheme.Custom))
         {
             return Red;
         }
 
         return scheme switch
         {
+            BatteryColorScheme.Custom => custom,
             BatteryColorScheme.Simple => Green,
             BatteryColorScheme.Levels => StepColor(percent),
             BatteryColorScheme.Device => KindColors.GetValueOrDefault(Kind, Green),
@@ -66,6 +76,9 @@ internal sealed record BatteryWidgetRow(
             _ => Charging ? Cyan : StepColor(percent),
         };
     }
+
+    public static bool IsHexColor(string? value) =>
+        value is { Length: 7 } && value[0] == '#' && value.Skip(1).All(char.IsAsciiHexDigit);
 
     private static string StepColor(int percent) =>
         percent switch
@@ -119,6 +132,8 @@ internal enum BatteryColorScheme
     Device,
 
     Gradient,
+
+    Custom,
 }
 
 internal enum BatteryWidgetLayout
@@ -135,6 +150,13 @@ internal enum BatteryListAlignment
     Center,
 
     Bottom,
+}
+
+internal enum BatteryNamePosition
+{
+    Below,
+
+    Inside,
 }
 
 internal enum BatterySortMode
@@ -162,9 +184,31 @@ internal sealed record BatteryWidgetOptions(
     bool ShowNames = false,
     BatteryColorScheme Colors = BatteryColorScheme.LevelsCharging,
     BatteryListAlignment ListAlign = BatteryListAlignment.Top,
-    bool ShowRingTrend = false
+    bool ShowRingTrend = false,
+    string? BackgroundColor = null,
+    string? TextColor = null,
+    int RingSize = BatteryWidgetOptions.MaxRingSize,
+    BatteryNamePosition NamePosition = BatteryNamePosition.Below,
+    string RingColor = BatteryWidgetRow.White,
+    bool LowInRed = true
 )
 {
+    public const string NameBelow = "below";
+    public const string NameInside = "inside";
+
+    public static BatteryNamePosition ParseNamePosition(string? value) =>
+        value == NameInside ? BatteryNamePosition.Inside : BatteryNamePosition.Below;
+
+    public static string NamePositionValue(BatteryNamePosition position) =>
+        position == BatteryNamePosition.Inside ? NameInside : NameBelow;
+
+    public bool NameInRing => NamePosition == BatteryNamePosition.Inside;
+
+    public const int MinRingSize = 50;
+    public const int MaxRingSize = 100;
+
+    public double RingScale => Math.Clamp(RingSize, MinRingSize, MaxRingSize) / 100.0;
+
     public static readonly BatteryWidgetOptions Default = new(
         [],
         ShowBar: true,
@@ -214,6 +258,7 @@ internal sealed record BatteryWidgetOptions(
     public const string ColorsSimple = "simple";
     public const string ColorsDevice = "device";
     public const string ColorsGradient = "gradient";
+    public const string ColorsCustom = "custom";
 
     public static BatteryColorScheme ParseColors(string? value) =>
         value switch
@@ -222,6 +267,7 @@ internal sealed record BatteryWidgetOptions(
             ColorsSimple => BatteryColorScheme.Simple,
             ColorsDevice => BatteryColorScheme.Device,
             ColorsGradient => BatteryColorScheme.Gradient,
+            ColorsCustom => BatteryColorScheme.Custom,
             _ => BatteryColorScheme.LevelsCharging,
         };
 
@@ -232,6 +278,7 @@ internal sealed record BatteryWidgetOptions(
             BatteryColorScheme.Simple => ColorsSimple,
             BatteryColorScheme.Device => ColorsDevice,
             BatteryColorScheme.Gradient => ColorsGradient,
+            BatteryColorScheme.Custom => ColorsCustom,
             _ => ColorsLevelsCharging,
         };
 

@@ -62,6 +62,7 @@ public sealed class CatalogNotificationTests
         var polling = new BatteryPollingService(
             Array.Empty<IBatterySourceProvider>(),
             registry,
+            new ChargingInference(registry, TimeProvider.System),
             new StaticOptionsMonitor<BatteryPluginOptions>(options.Value),
             Serilog.Core.Logger.None
         );

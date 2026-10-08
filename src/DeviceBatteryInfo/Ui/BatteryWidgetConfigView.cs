@@ -15,9 +15,10 @@ internal static class BatteryWidgetConfigView
         string widgetLocalId,
         BatteryWidgetOptions current,
         IReadOnlyList<BatterySlot> devices,
-        JsonElement flows = default
+        JsonElement data = default
     )
     {
+        var flows = BatteryWidgetTypes.StoredFlows(data);
         var isPanel = widgetLocalId != BatteryWidgetTypes.TileId;
         var sourceIds = new UiState<IReadOnlyList<string>>(current.SourceIds);
         var layout = new UiState<string>(BatteryWidgetOptions.LayoutValue(current.Layout));
@@ -29,9 +30,15 @@ internal static class BatteryWidgetConfigView
         var showTrend = new UiState<bool>(current.ShowTrend);
         var showRingTrend = new UiState<bool>(current.ShowRingTrend);
         var lowThreshold = new UiState<double>(current.LowThreshold);
+        var ringSize = new UiState<double>(current.RingSize);
+        var namePosition = new UiState<string>(
+            BatteryWidgetOptions.NamePositionValue(current.NamePosition)
+        );
         var sort = new UiState<string>(BatteryWidgetOptions.SortValue(current.Sort));
         var title = new UiState<string>(current.Title);
         var colors = new UiState<string>(BatteryWidgetOptions.ColorsValue(current.Colors));
+        var ringColor = new UiState<string>(current.RingColor);
+        var lowInRed = new UiState<bool>(current.LowInRed);
         var listAlign = new UiState<string>(
             BatteryWidgetOptions.ListAlignValue(current.ListAlign)
         );
@@ -167,10 +174,32 @@ internal static class BatteryWidgetConfigView
                     (BatteryWidgetOptions.ColorsLevels, Strings.Widgets.Config.Colors.Levels()),
                     (BatteryWidgetOptions.ColorsSimple, Strings.Widgets.Config.Colors.Simple()),
                     (BatteryWidgetOptions.ColorsDevice, Strings.Widgets.Config.Colors.Device()),
-                    (BatteryWidgetOptions.ColorsGradient, Strings.Widgets.Config.Colors.Gradient())
+                    (BatteryWidgetOptions.ColorsGradient, Strings.Widgets.Config.Colors.Gradient()),
+                    (BatteryWidgetOptions.ColorsCustom, Strings.Widgets.Config.Colors.Custom())
                 ),
                 Binding = Bind.To(colors),
             }
+        );
+
+        var onlyCustom = UiValue.Of(
+            new UiVisibleWhen
+            {
+                ParameterName = "colors",
+                Values = [BatteryWidgetOptions.ColorsCustom],
+                SiblingValue = () => colors.Value,
+            }
+        );
+        appearance.Add(
+            new UiColorInput
+            {
+                Key = "ringColor",
+                Label = Strings.Widgets.Config.RingColor.Label(),
+                Binding = Bind.To(ringColor),
+                VisibleWhen = onlyCustom,
+            }
+        );
+        appearance.Add(
+            Toggle("lowInRed", Strings.Widgets.Config.LowInRed.Label(), lowInRed, onlyCustom)
         );
         appearance.Add(
             new UiNumberInput
@@ -182,6 +211,33 @@ internal static class BatteryWidgetConfigView
                 Step = 1,
                 ShowSlider = true,
                 Binding = Bind.To(lowThreshold),
+            }
+        );
+        appearance.Add(
+            new UiNumberInput
+            {
+                Key = "ringSize",
+                Label = Strings.Widgets.Config.RingSize.Label(),
+                Min = BatteryWidgetOptions.MinRingSize,
+                Max = BatteryWidgetOptions.MaxRingSize,
+                Step = 5,
+                ShowSlider = true,
+                Binding = Bind.To(ringSize),
+                VisibleWhen = OnlyFor(BatteryWidgetOptions.LayoutRings),
+            }
+        );
+        appearance.Add(
+            new UiChoiceInput
+            {
+                Key = "namePosition",
+                Label = Strings.Widgets.Config.NamePosition.Label(),
+                Segmented = true,
+                Options = Options(
+                    (BatteryWidgetOptions.NameBelow, Strings.Widgets.Config.NamePosition.Below()),
+                    (BatteryWidgetOptions.NameInside, Strings.Widgets.Config.NamePosition.Inside())
+                ),
+                Binding = Bind.To(namePosition),
+                VisibleWhen = OnlyFor(BatteryWidgetOptions.LayoutRings),
             }
         );
 
@@ -226,6 +282,17 @@ internal static class BatteryWidgetConfigView
                 )
             );
         }
+
+        // Macro Deck draws the border itself from the stored "border" key; the view draws the colours.
+        appearance.Add(
+            UiWidgetAppearance.Section(
+                data,
+                UiWidgetAppearanceFields.BackgroundColor
+                    | UiWidgetAppearanceFields.TransparentBackground
+                    | UiWidgetAppearanceFields.LabelColor
+                    | UiWidgetAppearanceFields.Border
+            )
+        );
 
         return new UiWidgetConfiguration
         {

@@ -91,6 +91,71 @@ internal static class BatteryWidgetPreviews
     )]
     public static UiElement TileNoSignal() => TileOf(BatteryWidgetSamples.TileNoSignal());
 
+    [UiPreview(
+        "Tile - custom colours",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileCustomColors() => TileOf(BatteryWidgetSamples.TileCustomColors());
+
+    [UiPreview(
+        "Tile - transparent background",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileTransparent() => TileOf(BatteryWidgetSamples.TileTransparent());
+
+    [UiPreview(
+        "Panel - list with custom colours",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelListCustomColors() =>
+        PanelOf(BatteryWidgetSamples.PanelListCustomColors());
+
+    [UiPreview(
+        "Tile - smaller ring",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileSmallRing() => TileOf(BatteryWidgetSamples.TileSmallRing());
+
+    [UiPreview(
+        "Panel - smaller rings",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelSmallRings() => PanelOf(BatteryWidgetSamples.PanelSmallRings());
+
+    [UiPreview(
+        "Tile - name in ring",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileNameInRing() => TileOf(BatteryWidgetSamples.TileNameInRing());
+
+    [UiPreview(
+        "Panel - names in rings",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelNamesInRings() =>
+        PanelOf(BatteryWidgetSamples.PanelNamesInRings());
+
+    [UiPreview(
+        "Panel - black and white",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelMonochrome() => PanelOf(BatteryWidgetSamples.PanelMonochrome());
+
+    [UiPreview(
+        "Tile - black and white, low not red",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileMonochromeLow() => TileOf(BatteryWidgetSamples.TileMonochromeLow());
+
     private static UiElement PanelOf(BatteryWidgetModel model) =>
         BatteryWidgetView.Build(
             BatteryWidgetTypes.PanelId,

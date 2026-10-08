@@ -54,14 +54,15 @@ src/DeviceBatteryInfo/
   Core/                    IBatterySource, BatteryReading, BatteryRegistry, BatteryPollingService,
                            BatteryPluginOptions, BatterySlots (config -> device set, one place),
                            BatteryTrendTracker (per-device charge history -> BatteryTrend),
-                           BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate)
+                           BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate),
+                           ChargingInference (a rising level -> Charging, for sources that cannot tell)
   Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands
                            Razer, Logitech, Corsair, Rapoo, Aula, Sony), each a pure parser + an IO
                            wrapper behind an interface + IBatterySource(+Provider);
                            SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset,
                            Linux: /sys/class/power_supply) and Bluetooth has IBluetoothBatteryReader
-                           (Windows: PowerShell PnP, macOS: system_profiler plus pmset accps, Linux:
-                           busctl against BlueZ; the last two share BluetoothSnapshot), picked by
+                           (Windows: cfgmgr32, macOS: system_profiler plus pmset accps, Linux:
+                           busctl against BlueZ; all three share BluetoothSnapshot), picked by
                            OperatingSystem in BatterySourceRegistration;
                            ExternalProcess runs the command line tools;
                            BatterySourceRegistration wires them into DI. DeviceFamily.cs holds the
@@ -120,6 +121,10 @@ Design knowledge that is not obvious from the code alone:
   default device and no options-based seeding, so a fresh install shows nothing until the user adds a
   device through the config flow (the widgets' empty state points them there). A device `Id` (the
   `battery_<id>_*` variable prefix, a public API) is `slug(name)`, deduped in entry-id order.
+- **Every host callback can be refused while the poll is busy.** The host throttles all of a
+  plugin's callbacks together, adb included, and a refused `RegisterWidgetTypeAsync` marks the whole
+  integration unusable (every widget shows "unavailable"). Wrap config reads and registrations in
+  `HostCallRetry.RunAsync`, which retries "too quickly" and connection refusals with backoff.
 - **`BatteryIntegration` is a singleton** (the hosting DI registers integrations that way) and also a
   capability-handler type, so the whole class obeys the no-blocking rule: variable push is
   fire-and-forget `async Task`, never awaited from the `registry.Changed` handler.
@@ -155,13 +160,22 @@ Design knowledge that is not obvious from the code alone:
   1 there and it disappears). `BatteryWidgetViewTests` checks every path against the renderer's
   grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
   colour (`BatteryWidgetRow.Color` for the widget's `colors` scheme, all Apple system colours so every
-  scheme has the same saturation; every scheme shows a level at or below the threshold in red even
+  scheme has the same saturation, plus `custom`, one `ringColor` whose `lowInRed` switch is the only
+  way to drop the red; every scheme shows a level at or below the threshold in red even
   while charging and a stale or unknown one in grey) and the percentage uses the primary text role. A ring is a full-turn `UiGauge`
   inside a `UiModifier` with `Frame.AspectRatio = 1` and a `UiLayer` for the gauge, the bolt and the
   face; the gauge is inset by half the bolt's height minus half its stroke, which puts a charging
   bolt exactly in the gap the gauge leaves at the top (`StartAngle`/`EndAngle`, 0 is up, clockwise).
   The face (glyph over percentage) must fit the gauge's inner circle, radius about 0.35 of the
   diameter: the corners of the percentage line are what collide, so check them, not just the height.
+  The ring fills its slot and the diameter only sizes its parts, so `ringSize` (50-100 %, default
+  100) shrinks a ring by capping its frame (`MaxWidth`/`MaxHeight`) at the scaled diameter and sizing
+  the parts from that; at 100 % the frame stays uncapped, so existing widgets render as before.
+  `namePosition: "inside"` puts the name in the face under the percentage (the panel only with
+  `showNames`): the glyph shrinks (`FaceGlyphNamed`), and the name sits in a `UiModifier` whose
+  `MaxWidth` keeps its corners within the inner circle's chord at the bottom of the face, with a
+  `MinSize` so a long name shrinks before it truncates. The line below the ring goes, and the stacked
+  tile and `Arrange` give its room back to the ring. The wide tile keeps the name in its details.
   Every `UiLength` is a fraction of the whole widget's basis, never of a grid cell, so the ring panel
   estimates its ring diameter (`BatteryWidgetView.Arrange`: the column count that gives the largest
   ring for the device count and aspect) and sizes each ring's parts reactively from that; a
@@ -199,6 +213,19 @@ Design knowledge that is not obvious from the code alone:
   from the stored data, and allowed by the `DataSchema`, whose `additionalProperties: false` would
   otherwise reject it). Without an `Editor` region the desktop draws the properties as one full-width
   pane, which looks stretched.
+- **Macro Deck draws the widget border, not the plugin.** The host draws the ring around any widget
+  from the stored `border` key (`{ "style", "color" }`), so the config form only adds
+  `UiWidgetAppearance.Section(data, UiWidgetAppearanceFields.Border)` and the `DataSchema` must allow
+  `border`. The section's colour field is conditioned on `style` inside the `border` object scope
+  (`border.style`). Background and text colour come from the same section (`BackgroundColor`,
+  `TransparentBackground`, `LabelColor`) and are drawn by the plugin: `UiWidgetAppearance.Read` fills
+  `BatteryWidgetOptions.BackgroundColor`/`TextColor`, the root stack's `Background` takes the stored
+  value as is (`transparent` on the root drops the deck's tile face), and both descriptors declare
+  them in `AppearanceProperties` so the Set Background Color / Set Label Color actions reach the
+  widgets. A text `Color` takes `#rrggbb` only (an 8-digit hex is ignored), so secondary and muted
+  text are mixed toward an opaque background (80 % and 60 %) and use the full colour over the theme's
+  face or a transparent one. `UiGauge` has no track colour, so the ring's empty track stays the
+  theme's on a custom background (accepted).
 - **Widget previews:** `Ui/BatteryWidgetPreviews.cs` has one `static` parameterless method per
   scenario, each `[UiPreview(name, View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]`
   returning a `UiElement`. `UiPreviewCatalog.Scan` (run by the hosting `ui` capability over the
@@ -225,8 +252,17 @@ Design knowledge that is not obvious from the code alone:
   released widgets already store `showTrend: true`, which would shrink every existing ring. Both the `trend`
   and `trend-rate` variable suffixes are public API like every other field suffix in
   `BatteryVariableCatalog`.
+- **Charging is inferred where a source cannot tell.** Bluetooth only ever reports a level, so
+  `BluetoothBatterySource` fills in `Discharging` with `BatteryReading.StatusIsAssumed`; an `Unknown`
+  status counts the same. `ChargingInference` (a DI singleton like `BatteryTrendTracker`, applied by
+  the poll loop before `BatteryRegistry.Update`) turns such a reading into `Charging` once the level is
+  `MinRise` (2) points above its lowest in the last `RiseWindow` (15 min), and back on any drop below
+  the peak or after `IdleTimeout` (30 min) without a rise, restarting its history so the old low cannot
+  re-trigger. It sits before the registry on purpose: the widgets, the `charging`/`status` variables,
+  the trend segments and the charging events all see the same state (the user chose this over a
+  widget-only guess). A state a source reported is never replaced.
 - **Bluetooth battery data lives on a different PnP node than the one the user picks, and is only
-  cached opportunistically.** `PowerShellPnpBatteryReader` reads `DEVPKEY_Bluetooth_Battery` from
+  cached opportunistically.** `WindowsBluetoothBatteryReader` reads `DEVPKEY_Bluetooth_Battery` from
   Windows' own PnP device tree. Every physical device shows up as many PnP nodes sharing one 6-byte
   Bluetooth address (`BTHENUM\DEV_<mac>\...` is the single root node whose `FriendlyName` matches what
   Windows Settings/Device Manager show; everything else is a sibling SDP/profile node, e.g. the
@@ -239,21 +275,26 @@ Design knowledge that is not obvious from the code alone:
   against real hardware (a pure A2DP speaker with no microphone never has that node and never gets a
   reading; a device that has the node but no value yet still belongs in the list). List every present
   root node (`^(BTHENUM|BTHLE)\DEV_`) that clears that bar, by name, and let `ReadRawAsync` (and its
-  `Unavailable` fallback, already handled) deal with "no value yet". `ReadRawAsync` cannot resolve by
-  `FriendlyName` alone either: given the picked root name, it has to find the Bluetooth address embedded
-  in that node's `InstanceId` and then search every present node sharing that address for whichever one
-  currently carries the property. Extracting that address is not a bare 12-hex-digit regex - every
-  classic SDP node's GUID ends in the constant Bluetooth Base UUID (`...-8000-00805F9B34FB`), itself 12
-  hex digits, and matches indiscriminately across every other paired device's nodes too if not excluded.
-  The real address only ever appears immediately after `DEV_` or `&0&` (the radio-address separator
-  every child node's `InstanceId` has), so the extraction regex must anchor on one of those two
-  prefixes. Batching the battery-property lookup (`Get-PnpDeviceProperty -InstanceId <array>`) across
-  every present PnP device on the system silently returns nothing at all, confirmed directly - scope it
-  to the Bluetooth enumerators first, same as everything else here. Both scripts are C# 11 raw
-  interpolated string literals (`$$"""..."""`): a plain `{` or `}` is literal PowerShell (script blocks,
-  hashtables), only `{{...}}` interpolates a C# value, which is what makes it readable as actual
-  multi-line PowerShell with real variable names instead of an escaped, concatenated one-liner. Keep
-  writing new embedded PowerShell here the same way.
+  `Unavailable` fallback, already handled) deal with "no value yet". A read cannot resolve by
+  `FriendlyName` alone either: the level belongs to whichever node shares the name's Bluetooth address.
+  Extracting that address is not a bare 12-hex-digit regex - every classic SDP node's GUID ends in the
+  constant Bluetooth Base UUID (`...-8000-00805F9B34FB`), itself 12 hex digits, and matches
+  indiscriminately across every other paired device's nodes too if not excluded. The real address only
+  ever appears immediately after `DEV_` or `&0&` (the radio-address separator every child node's
+  `InstanceId` has), so the extraction regex must anchor on one of those two prefixes.
+  **The tree is read through cfgmgr32 (`NativeDeviceProperties`), never PowerShell.** It lists the
+  present nodes of the `BTHENUM`, `BTHHFENUM`, `BTHLE` and `BTHLEDEVICE` enumerators
+  (`CM_Get_Device_ID_ListW`, enumerator + present filter) and reads each node's name (FriendlyName,
+  else DeviceDesc, as `Get-PnpDevice` does) and level (`CM_Get_DevNode_PropertyW`); that takes tens of
+  milliseconds for every device. The PowerShell it replaced cost 3.3 s per device and per poll, six
+  devices at once took 13.5 s against the 10 s read timeout (so from about five Bluetooth devices every
+  one went stale), `Get-PnpDeviceProperty` costs about 0.3 s per node, and batched over many nodes it
+  returned values for only some of them, a different set on every run. `BluetoothPnpLevels` is the pure
+  part: `ByName` maps every named node (a manual name may be a sibling's, such as the Hands-Free AG) to
+  its device's level, BLE nodes first, names compared ignoring case as `Get-PnpDevice -FriendlyName` did;
+  `Pickable` is the picker rule above. Reads go through `BluetoothSnapshot` like macOS, so every
+  Bluetooth source of a poll shares one walk. `HardwareTests.Reads_every_bluetooth_device_in_one_poll`
+  reads them all on real hardware and fails past 5 s.
 - **macOS sources are command line tools behind the same interfaces, run through `ExternalProcess`.** Use
   absolute paths (`/usr/bin/pmset`, `/usr/sbin/system_profiler`): the plugin inherits its environment
   from the Macro Deck host. `PmsetBatteryParser` reads the first `InternalBattery` line only (no line or
@@ -280,8 +321,9 @@ Design knowledge that is not obvious from the code alone:
   means the user has not enabled ADB for plugins, and the source throws so the poll loop logs it once
   and keeps the last value. The address is a serial or `host:port`; only the latter is passed to
   `ConnectAsync`, because a USB serial cannot be connected to. The host allows 4 concurrent adb calls
-  per plugin and refuses the fifth with `RateLimited`, which matters if more phones are added than
-  that. The config flow's phone picker (`SystemDeviceDiscovery.ListAndroidDevicesAsync`) reads each
+  per plugin and refuses the fifth with `RateLimited`, and adb counts toward the plugin's shared
+  callback throttle, so `AdbBatterySourceProvider` gates every phone's reads through one semaphore of
+  2 (a user with 4 phones made the poll refuse its own widget-type registration). The config flow's phone picker (`SystemDeviceDiscovery.ListAndroidDevicesAsync`) reads each
   attached phone's battery one at a time for the same reason, and shares `DeviceConfigFlow.PickerField`
   with the Bluetooth picker: a list when something is attached, a text field when nothing is or an
   existing entry is being edited, plus a manual override field. Tests use `FakeAndroidDeviceManager`

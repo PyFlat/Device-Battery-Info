@@ -3,6 +3,7 @@ using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Ui;
 using MacroDeck.Sdk.Ui;
 using MacroDeck.Sdk.Widgets;
+using MacroDeck.Ui.Config;
 using MacroDeck.Ui.Model.Surfaces;
 using MacroDeck.Ui.Runtime;
 
@@ -23,7 +24,11 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
     {
         foreach (var descriptor in BatteryWidgetTypes.All)
         {
-            var registration = await context.RegisterWidgetTypeAsync(descriptor, cancellationToken);
+            // A refusal here would leave the whole integration unusable, so it waits out the throttle.
+            var registration = await HostCallRetry.RunAsync(
+                () => context.RegisterWidgetTypeAsync(descriptor, cancellationToken),
+                cancellationToken
+            );
             _widgetTypeIds[descriptor.Id] = registration.WidgetTypeId;
             _logger.Information(
                 "Registered widget type {LocalId} as {QualifiedId}.",
@@ -148,12 +153,7 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         var options = ParseOptions(data);
         var view = new UiView(
             surface,
-            BatteryWidgetConfigView.Build(
-                localId,
-                options,
-                CurrentSlots(),
-                BatteryWidgetTypes.StoredFlows(data)
-            )
+            BatteryWidgetConfigView.Build(localId, options, CurrentSlots(), data ?? default)
         );
         return new UiViewSession(view);
     }
@@ -285,6 +285,32 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 ? BatteryWidgetOptions.ParseListAlign(listAlignValue.GetString())
                 : BatteryWidgetOptions.Default.ListAlign;
 
+        var ringSize =
+            obj.TryGetProperty("ringSize", out var ringSizeValue)
+            && ringSizeValue.ValueKind == JsonValueKind.Number
+            && ringSizeValue.TryGetInt32(out var parsedRingSize)
+                ? Math.Clamp(
+                    parsedRingSize,
+                    BatteryWidgetOptions.MinRingSize,
+                    BatteryWidgetOptions.MaxRingSize
+                )
+                : BatteryWidgetOptions.MaxRingSize;
+
+        var namePosition =
+            obj.TryGetProperty("namePosition", out var namePositionValue)
+            && namePositionValue.ValueKind == JsonValueKind.String
+                ? BatteryWidgetOptions.ParseNamePosition(namePositionValue.GetString())
+                : BatteryNamePosition.Below;
+
+        var ringColor =
+            obj.TryGetProperty("ringColor", out var ringColorValue)
+            && ringColorValue.ValueKind == JsonValueKind.String
+            && BatteryWidgetRow.IsHexColor(ringColorValue.GetString())
+                ? ringColorValue.GetString()!.ToUpperInvariant()
+                : BatteryWidgetRow.White;
+
+        var appearance = UiWidgetAppearance.Read(obj);
+
         return new BatteryWidgetOptions(
             sourceIds,
             Flag("showBar", true),
@@ -299,9 +325,18 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             Flag("showNames", false),
             colors,
             listAlign,
-            Flag("showRingTrend", false)
+            Flag("showRingTrend", false),
+            NonEmpty(appearance.BackgroundColor),
+            NonEmpty(appearance.LabelColor),
+            ringSize,
+            namePosition,
+            ringColor,
+            Flag("lowInRed", true)
         );
     }
+
+    private static string? NonEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string? Attribute(UiSurface surface, string key) =>
         surface.Attributes.TryGetValue(key, out var value)

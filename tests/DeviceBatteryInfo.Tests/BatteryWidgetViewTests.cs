@@ -133,6 +133,7 @@ public sealed class BatteryWidgetViewTests
     }
 
     // The host resolves a condition by the bare field id, so wrapping tabs and rows must not prefix it.
+    // Only an object input opens a scope (the border's "style" is border.style).
     [TestCase(BatteryWidgetTypes.PanelId)]
     [TestCase(BatteryWidgetTypes.TileId)]
     public void Every_visibility_condition_names_a_field_the_renderer_can_find(string widgetId)
@@ -154,10 +155,14 @@ public sealed class BatteryWidgetViewTests
         var conditions = new List<string>();
         void Walk(System.Text.Json.Nodes.JsonNode node)
         {
-            ids.Add(node["id"]!.GetValue<string>());
+            var id = node["id"]!.GetValue<string>();
+            ids.Add(id);
             if (node["properties"]?["visibleWhen"]?["parameterName"] is { } name)
             {
-                conditions.Add(name.GetValue<string>());
+                var scope = id.Contains('.', StringComparison.Ordinal)
+                    ? id[..(id.LastIndexOf('.') + 1)]
+                    : "";
+                conditions.Add(scope + name.GetValue<string>());
             }
 
             foreach (var child in node["children"]?.AsArray() ?? [])
@@ -168,7 +173,10 @@ public sealed class BatteryWidgetViewTests
 
         Walk(root);
 
-        Assert.That(ids, Does.Contain("sourceIds").And.Contain("colors").And.Contain("flows"));
+        Assert.That(
+            ids,
+            Does.Contain("sourceIds").And.Contain("colors").And.Contain("flows").And.Contain("border")
+        );
         Assert.That(conditions, Is.All.Matches<string>(ids.Contains));
         if (widgetId == BatteryWidgetTypes.PanelId)
         {
@@ -192,7 +200,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(13));
+        Assert.That(ours, Has.Length.EqualTo(22));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(
@@ -218,6 +226,167 @@ public sealed class BatteryWidgetViewTests
             Assert.That(instance.View.Tree.Root, Is.Not.Null);
             await instance.DisposeAsync();
         }
+    }
+
+    // The renderer takes #rrggbb only, so fainter text is mixed toward an opaque background.
+    [Test]
+    public void Custom_colours_reach_the_background_and_every_text_role()
+    {
+        var model = BatteryWidgetSamples.TileCustomColors();
+        var colors = TextColors(model);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(colors["background"], Is.EqualTo("#F2F2F7"));
+            Assert.That(colors["pct"], Is.EqualTo("#1C1C1E"));
+            Assert.That(colors["name"], Is.EqualTo("#474749"));
+            Assert.That(colors["caption"], Is.EqualTo("#727275"));
+        }
+
+        var unknownBackdrop = TextColors(
+            model with
+            {
+                Options = model.Options with { BackgroundColor = "transparent" },
+            }
+        );
+        Assert.That(
+            new[] { unknownBackdrop["pct"], unknownBackdrop["name"], unknownBackdrop["caption"] },
+            Is.All.EqualTo("#1C1C1E")
+        );
+    }
+
+    // The ring fills its slot, so only a capped frame makes it smaller; full size keeps the old tree.
+    [TestCase(BatteryWidgetTypes.TileId)]
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    public void A_smaller_ring_caps_its_frame_and_full_size_does_not(string widgetId)
+    {
+        var model =
+            widgetId == BatteryWidgetTypes.TileId
+                ? BatteryWidgetSamples.TileDischarging()
+                : BatteryWidgetSamples.PanelNamed();
+
+        System.Text.Json.Nodes.JsonNode? RingFrame(int ringSize)
+        {
+            var root = TreeJson(
+                widgetId,
+                model with
+                {
+                    Options = model.Options with { RingSize = ringSize },
+                }
+            );
+            System.Text.Json.Nodes.JsonNode? Find(System.Text.Json.Nodes.JsonNode node)
+            {
+                if (node["id"]!.GetValue<string>().EndsWith(".ring", StringComparison.Ordinal))
+                {
+                    return node["properties"]?["frame"];
+                }
+
+                return (node["children"]?.AsArray() ?? [])
+                    .Select(child => Find(child!))
+                    .FirstOrDefault(frame => frame is not null);
+            }
+
+            return Find(root);
+        }
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(RingFrame(100)?["maxWidth"], Is.Null);
+            Assert.That(RingFrame(60)?["maxWidth"], Is.Not.Null);
+            Assert.That(RingFrame(60)?["maxHeight"], Is.Not.Null);
+        }
+    }
+
+    [TestCase(BatteryWidgetTypes.TileId)]
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    public void The_name_moves_into_the_ring_and_leaves_no_line_below(string widgetId)
+    {
+        var model =
+            widgetId == BatteryWidgetTypes.TileId
+                ? BatteryWidgetSamples.TileDischarging()
+                : BatteryWidgetSamples.PanelNamed();
+
+        List<string> NameIds(BatteryNamePosition position)
+        {
+            var ids = new List<string>();
+            void Walk(System.Text.Json.Nodes.JsonNode node)
+            {
+                var id = node["id"]!.GetValue<string>();
+                // The wide tile names the device beside its ring, in either position.
+                if (
+                    id.EndsWith(".name", StringComparison.Ordinal)
+                    && !id.Contains(".wide.", StringComparison.Ordinal)
+                )
+                {
+                    ids.Add(id);
+                }
+
+                foreach (var child in node["children"]?.AsArray() ?? [])
+                {
+                    Walk(child!);
+                }
+            }
+
+            Walk(
+                TreeJson(
+                    widgetId,
+                    model with
+                    {
+                        Options = model.Options with { NamePosition = position },
+                    }
+                )
+            );
+            return ids;
+        }
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(NameIds(BatteryNamePosition.Below), Is.Not.Empty);
+            Assert.That(NameIds(BatteryNamePosition.Below), Has.None.Contains(".ring."));
+            Assert.That(NameIds(BatteryNamePosition.Inside), Is.Not.Empty);
+            Assert.That(NameIds(BatteryNamePosition.Inside), Is.All.Contains(".ring."));
+        }
+    }
+
+    private static System.Text.Json.Nodes.JsonNode TreeJson(
+        string widgetId,
+        BatteryWidgetModel model
+    )
+    {
+        var view = new UiView(
+            WidgetSurface(),
+            BatteryWidgetView.Build(widgetId, new UiState<BatteryWidgetModel>(model), 16)
+        );
+        return System.Text.Json.Nodes.JsonNode.Parse(
+            MacroDeck.Ui.Model.Serialization.UiCanonicalJson.Serialize(view.Tree.Root)
+        )!;
+    }
+
+    private static Dictionary<string, string?> TextColors(BatteryWidgetModel model)
+    {
+        var root = TreeJson(BatteryWidgetTypes.TileId, model);
+
+        var colors = new Dictionary<string, string?>
+        {
+            ["background"] = root["properties"]?["background"]?.GetValue<string>(),
+        };
+        void Walk(System.Text.Json.Nodes.JsonNode node)
+        {
+            var id = node["id"]!.GetValue<string>();
+            var leaf = id[(id.LastIndexOf('.') + 1)..];
+            if (node["properties"]?["color"] is { } color && leaf is "pct" or "name" or "caption")
+            {
+                colors[leaf] = color.GetValue<string>();
+            }
+
+            foreach (var child in node["children"]?.AsArray() ?? [])
+            {
+                Walk(child!);
+            }
+        }
+
+        Walk(root);
+        return colors;
     }
 
     [Test]
@@ -430,6 +599,26 @@ public sealed class BatteryWidgetViewTests
                 Assert.That(R("a", null).Color(20, scheme), Is.EqualTo(BatteryWidgetRow.Grey));
                 Assert.That(R("a", 80).Color(20, scheme), Does.Match("^#[0-9A-F]{6}$"));
             }
+        }
+    }
+
+    [Test]
+    public void The_custom_scheme_uses_its_colour_and_can_leave_a_low_level_uncoloured()
+    {
+        const BatteryColorScheme custom = BatteryColorScheme.Custom;
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(R("a", 80).Color(20, custom, "#ffffff"), Is.EqualTo("#FFFFFF"));
+            Assert.That(R("a", 80, charging: true).Color(20, custom, "#12AB34"), Is.EqualTo("#12AB34"));
+            Assert.That(R("a", 80).Color(20, custom, "white"), Is.EqualTo(BatteryWidgetRow.White));
+            Assert.That(R("a", 12).Color(20, custom, "#FFFFFF"), Is.EqualTo(BatteryWidgetRow.Red));
+            Assert.That(R("a", 12).Color(20, custom, "#FFFFFF", lowInRed: false), Is.EqualTo("#FFFFFF"));
+            Assert.That(
+                R("a", 60, stale: true).Color(20, custom, "#FFFFFF", lowInRed: false),
+                Is.EqualTo(BatteryWidgetRow.Grey)
+            );
+            // The switch belongs to the custom scheme only.
+            Assert.That(R("a", 12).Color(20, BatteryColorScheme.Simple, lowInRed: false), Is.EqualTo(BatteryWidgetRow.Red));
         }
     }
 

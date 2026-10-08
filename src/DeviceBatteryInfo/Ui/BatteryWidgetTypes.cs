@@ -26,6 +26,7 @@ internal static class BatteryWidgetTypes
             {
                 SupportsFlows = true,
                 DefaultShortPressAction = RefreshOnPress,
+                AppearanceProperties = Appearance,
             },
             new WidgetTypeDescriptor(
                 TileId,
@@ -38,8 +39,16 @@ internal static class BatteryWidgetTypes
             {
                 SupportsFlows = true,
                 DefaultShortPressAction = RefreshOnPress,
+                AppearanceProperties = Appearance,
             },
         ];
+
+    // Lets Macro Deck's Set Background Color and Set Label Color actions reach these widgets.
+    private static readonly WidgetAppearanceProperty[] Appearance =
+    [
+        WidgetAppearanceProperty.BackgroundColor,
+        WidgetAppearanceProperty.LabelColor,
+    ];
 
     // Runs until the user gives the widget a Short Press action of their own; their action wins.
     private static readonly WidgetDefaultAction RefreshOnPress = new(RefreshBatteryAction.ActionId);
@@ -51,7 +60,7 @@ internal static class BatteryWidgetTypes
             : default;
 
     private const string DefaultData =
-        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false}""";
+        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100,"namePosition":"below","ringColor":"#FFFFFF","lowInRed":true}""";
 
     private const string Schema = """
         {
@@ -74,6 +83,19 @@ internal static class BatteryWidgetTypes
               "description": "Show the recent charge/drain rate (for example -13%/1h) when there is no time-to-full to show instead."
             },
             "lowThreshold": { "type": "integer", "minimum": 1, "maximum": 99, "default": 20 },
+            "ringSize": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 100,
+              "default": 100,
+              "description": "The ring's size in percent of the room it has. The list layout has no ring."
+            },
+            "namePosition": {
+              "type": "string",
+              "enum": ["below", "inside"],
+              "default": "below",
+              "description": "Where a ring shows the device name: on a line below it, or inside it under the percentage. The panel shows names only with showNames."
+            },
             "sort": {
               "type": "string",
               "enum": ["manual", "lowest-first", "alphabetical", "charging-first"],
@@ -88,9 +110,19 @@ internal static class BatteryWidgetTypes
             },
             "colors": {
               "type": "string",
-              "enum": ["levels-charging", "levels", "simple", "device", "gradient"],
+              "enum": ["levels-charging", "levels", "simple", "device", "gradient", "custom"],
               "default": "levels-charging",
-              "description": "Ring and bar colours. Every scheme shows a level at or below lowThreshold in red."
+              "description": "Ring and bar colours. Every scheme shows a level at or below lowThreshold in red, except 'custom' with lowInRed off."
+            },
+            "ringColor": {
+              "type": "string",
+              "default": "#FFFFFF",
+              "description": "The ring, icon and bar colour of the 'custom' scheme, #rrggbb."
+            },
+            "lowInRed": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the 'custom' scheme still shows a level at or below lowThreshold in red."
             },
             "listAlign": {
               "type": "string",
@@ -101,6 +133,22 @@ internal static class BatteryWidgetTypes
             "flows": {
               "type": "array",
               "description": "The actions a press runs, edited in the widget's action list."
+            },
+            "border": {
+              "type": "object",
+              "properties": {
+                "style": { "type": "string" },
+                "color": { "type": "string" }
+              },
+              "description": "The border Macro Deck draws around the widget, written by the border fields and the Set Border action."
+            },
+            "backgroundColor": {
+              "type": "string",
+              "description": "The widget's background, #rrggbb or transparent. Absent means the deck's own tile face."
+            },
+            "labelColor": {
+              "type": "string",
+              "description": "The text colour, #rrggbb. Secondary and muted text use it fainter. Absent means the theme's text colours."
             },
             "showNames": {
               "type": "boolean",

@@ -21,8 +21,9 @@ peripherals, right on your deck.
 (level ring or bar, percentage, charging indicator, time to full, battery trend, low-battery threshold).
 Each device is drawn with an icon for its kind and a coloured ring, with a bolt in the ring's gap while it
 charges. The colour scheme is a widget setting: by level with cyan while charging (the default), by
-level only, green only, by device type, or a smooth gradient. In every scheme a level at or below the
-low-battery threshold is red, even while charging:
+level only, green only, by device type, a smooth gradient, or one custom colour of your choice (for
+a black and white board, say). In every scheme a level at or below the low-battery threshold is red,
+even while charging; only the custom colour lets you switch that off:
 
 - **Battery panel** shows several devices at once, as a grid of rings that arranges itself to the
   widget's size (optionally with names), or as a list of rows with bars aligned to the top, centre or
@@ -51,9 +52,16 @@ These work with whatever hardware of that kind you have.
 | This computer / laptop         | macOS    | `pmset -g batt`                                 | yes     | yes      |
 | This computer / laptop         | Linux    | `/sys/class/power_supply`                       | yes     | yes      |
 | Android phone                  | all      | Macro Deck's own adb connection                 | yes     | yes      |
-| Bluetooth audio device         | Windows  | PnP battery property via PowerShell             | yes     | rarely   |
-| Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | no       |
-| Bluetooth device               | Linux    | BlueZ's `Battery1` over D-Bus (`busctl`)        | yes     | no       |
+| Bluetooth audio device         | Windows  | PnP battery property via cfgmgr32               | yes     | inferred |
+| Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | inferred |
+| Bluetooth device               | Linux    | BlueZ's `Battery1` over D-Bus (`busctl`)        | yes     | inferred |
+
+Bluetooth reports only a level, never whether the device charges. So a level that rises by at least
+2 points within 15 minutes counts as charging, everywhere: the widgets, the `charging` and `status`
+variables and the charging events. It ends as soon as the level drops, or after 30 minutes without a
+rise. A device that reports in 10 % steps shows charging after its first step up, so the indicator
+can lag the charger by one step. The same applies to any source that reports a level with an unknown
+charging state.
 
 On macOS a Bluetooth device reports one level: its main battery, or the lower of the left and right
 earbud (the case is ignored). Connected devices that `system_profiler` lists without a battery, such as
