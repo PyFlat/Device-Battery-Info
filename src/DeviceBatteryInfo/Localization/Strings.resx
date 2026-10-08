@@ -339,8 +339,41 @@
     <data name="ConfigFlow.Device.BluetoothNameCustom.Description" xml:space="preserve">
         <value>Overrides the list above when filled in. Use this for a device that is not connected right now - it must match the name exactly as your system shows it.</value>
     </data>
-    <data name="ConfigFlow.Device.BluetoothKind.Label" xml:space="preserve">
-        <value>Kind</value>
+    <data name="ConfigFlow.Device.Kind.Label" xml:space="preserve">
+        <value>Icon</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Phone" xml:space="preserve">
+        <value>Phone</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Tablet" xml:space="preserve">
+        <value>Tablet</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Headset" xml:space="preserve">
+        <value>Headset</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.VrHeadset" xml:space="preserve">
+        <value>VR headset</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Earbuds" xml:space="preserve">
+        <value>Earbuds</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Speaker" xml:space="preserve">
+        <value>Speaker</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Mouse" xml:space="preserve">
+        <value>Mouse</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Keyboard" xml:space="preserve">
+        <value>Keyboard</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Controller" xml:space="preserve">
+        <value>Controller</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Pen" xml:space="preserve">
+        <value>Pen</value>
+    </data>
+    <data name="ConfigFlow.Device.Kind.Options.Other" xml:space="preserve">
+        <value>Other</value>
     </data>
     <data name="Issues.LinuxDeviceAccess.Title" xml:space="preserve">
         <value>Linux needs a one-time permission to read a device</value>

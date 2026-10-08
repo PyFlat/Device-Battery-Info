@@ -20,7 +20,8 @@ peripherals, right on your deck.
 **Two deck widgets**, each with a config form to choose which devices it shows and what it displays
 (level ring or bar, percentage, charging indicator, time to full, battery trend, low-battery threshold).
 Each device is drawn with an icon for its kind and a coloured ring, with a bolt in the ring's gap while it
-charges. The colour scheme is a widget setting: by level with cyan while charging (the default), by
+charges. For adb and Bluetooth devices you pick the icon when adding the device (phone, tablet, VR
+headset, speaker and more). The colour scheme is a widget setting: by level with cyan while charging (the default), by
 level only, green only, by device type, a smooth gradient, or one custom colour of your choice (for
 a black and white board, say). In every scheme a level at or below the low-battery threshold is red,
 even while charging; only the custom colour lets you switch that off:

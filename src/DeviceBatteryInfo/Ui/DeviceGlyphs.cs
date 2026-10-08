@@ -19,6 +19,8 @@ internal static class DeviceGlyphs
         [BatterySourceKind.Tablet] = Tablet(),
         [BatterySourceKind.Controller] = Controller(),
         [BatterySourceKind.Pen] = Pen(),
+        [BatterySourceKind.Speaker] = Speaker(),
+        [BatterySourceKind.VrHeadset] = VrHeadset(),
         [BatterySourceKind.Other] = Battery(),
     };
 
@@ -109,6 +111,33 @@ internal static class DeviceGlyphs
         new GlyphPath(rotation: 45)
             .RoundedRect(0.42, 0.04, 0.16, 0.66, 0.06)
             .Polygon((0.42, 0.72), (0.58, 0.72), (0.5, 0.96))
+            .ToString();
+
+    // The cone sits inside the grille cut-out, so it never overlaps a second solid part.
+    private static string Speaker() =>
+        new GlyphPath()
+            .RoundedRect(0.2, 0.06, 0.6, 0.88, 0.12)
+            .Circle(0.5, 0.25, 0.07, hole: true)
+            .Circle(0.5, 0.62, 0.2, hole: true)
+            .Circle(0.5, 0.62, 0.09)
+            .ToString();
+
+    // One outline with the nose notch; the strap only overlaps solid visor.
+    private static string VrHeadset() =>
+        new GlyphPath()
+            .RoundedRect(0.01, 0.43, 0.98, 0.1, 0.03)
+            .MoveTo(0.19, 0.27)
+            .LineTo(0.81, 0.27)
+            .ArcTo(0.13, 0.94, 0.4)
+            .LineTo(0.94, 0.6)
+            .ArcTo(0.13, 0.81, 0.73)
+            .LineTo(0.63, 0.73)
+            .ArcTo(0.13, 0.37, 0.73, clockwise: false)
+            .LineTo(0.19, 0.73)
+            .ArcTo(0.13, 0.06, 0.6)
+            .LineTo(0.06, 0.4)
+            .ArcTo(0.13, 0.19, 0.27)
+            .Close()
             .ToString();
 
     private static string Battery() =>
@@ -206,9 +235,9 @@ internal static class DeviceGlyphs
             return this;
         }
 
-        public GlyphPath ArcTo(double radius, double x, double y)
+        public GlyphPath ArcTo(double radius, double x, double y, bool clockwise = true)
         {
-            Arc(radius, x, y, clockwise: true);
+            Arc(radius, x, y, clockwise);
             return this;
         }
 

@@ -16,7 +16,9 @@ internal static class DeviceConfigKeys
     public const string AdbAddressCustom = "adbAddressCustom";
     public const string BluetoothName = "bluetoothName";
     public const string BluetoothNameCustom = "bluetoothNameCustom";
-    public const string BluetoothKind = "bluetoothKind";
+    public const string Kind = "kind";
+    // Bluetooth entries written before adb devices had an icon choice stored their kind here.
+    public const string LegacyBluetoothKind = "bluetoothKind";
 
     public const string TypeSystem = "system";
     public const string TypeAdbPhone = "adb-phone";
@@ -67,6 +69,8 @@ internal static class DeviceConfigKeys
             "tablet" => BatterySourceKind.Tablet,
             "controller" => BatterySourceKind.Controller,
             "pen" => BatterySourceKind.Pen,
+            "speaker" => BatterySourceKind.Speaker,
+            "vr-headset" => BatterySourceKind.VrHeadset,
             _ => BatterySourceKind.Other,
         };
 
@@ -81,6 +85,8 @@ internal static class DeviceConfigKeys
             BatterySourceKind.Tablet => "tablet",
             BatterySourceKind.Controller => "controller",
             BatterySourceKind.Pen => "pen",
+            BatterySourceKind.Speaker => "speaker",
+            BatterySourceKind.VrHeadset => "vr-headset",
             _ => "other",
         };
 }

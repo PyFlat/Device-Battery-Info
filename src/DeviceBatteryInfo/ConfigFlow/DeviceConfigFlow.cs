@@ -22,17 +22,19 @@ internal sealed class DeviceConfigFlow(
 
     private static readonly TimeSpan DiscoveryBudget = TimeSpan.FromSeconds(5);
 
-    private static readonly string[] BluetoothKinds =
+    private static readonly (BatterySourceKind Kind, LocalizedText Label)[] KindOptions =
     [
-        "mouse",
-        "keyboard",
-        "headset",
-        "earbuds",
-        "phone",
-        "tablet",
-        "controller",
-        "pen",
-        "other",
+        (BatterySourceKind.Phone, Strings.ConfigFlow.Device.Kind.Options.Phone()),
+        (BatterySourceKind.Tablet, Strings.ConfigFlow.Device.Kind.Options.Tablet()),
+        (BatterySourceKind.Headset, Strings.ConfigFlow.Device.Kind.Options.Headset()),
+        (BatterySourceKind.VrHeadset, Strings.ConfigFlow.Device.Kind.Options.VrHeadset()),
+        (BatterySourceKind.Earbuds, Strings.ConfigFlow.Device.Kind.Options.Earbuds()),
+        (BatterySourceKind.Speaker, Strings.ConfigFlow.Device.Kind.Options.Speaker()),
+        (BatterySourceKind.Mouse, Strings.ConfigFlow.Device.Kind.Options.Mouse()),
+        (BatterySourceKind.Keyboard, Strings.ConfigFlow.Device.Kind.Options.Keyboard()),
+        (BatterySourceKind.Controller, Strings.ConfigFlow.Device.Kind.Options.Controller()),
+        (BatterySourceKind.Pen, Strings.ConfigFlow.Device.Kind.Options.Pen()),
+        (BatterySourceKind.Other, Strings.ConfigFlow.Device.Kind.Options.Other()),
     ];
 
     private readonly Dictionary<string, string?> _draft = new(StringComparer.Ordinal);
@@ -192,15 +194,14 @@ internal sealed class DeviceConfigFlow(
                 values[DeviceConfigKeys.AdbAddress] = ConfigFlowValue.Plain(
                     ResolvedAdbAddress()
                 );
+                values[DeviceConfigKeys.Kind] = ConfigFlowValue.Plain(ResolvedKind(type));
                 break;
 
             case DeviceType.Bluetooth:
                 values[DeviceConfigKeys.BluetoothName] = ConfigFlowValue.Plain(
                     ResolvedBluetoothName()
                 );
-                values[DeviceConfigKeys.BluetoothKind] = ConfigFlowValue.Plain(
-                    Draft(DeviceConfigKeys.BluetoothKind) ?? "headset"
-                );
+                values[DeviceConfigKeys.Kind] = ConfigFlowValue.Plain(ResolvedKind(type));
                 break;
         }
 
@@ -375,6 +376,7 @@ internal sealed class DeviceConfigFlow(
                     );
                 }
 
+                fields.Add(KindField(type));
                 break;
             }
 
@@ -409,16 +411,7 @@ internal sealed class DeviceConfigFlow(
                     );
                 }
 
-                fields.Add(
-                    ActionParameter.Choice(
-                        DeviceConfigKeys.BluetoothKind,
-                        BluetoothKinds
-                            .Select(k => new ActionParameterOption { Value = k, Label = k })
-                            .ToArray(),
-                        label: Strings.ConfigFlow.Device.BluetoothKind.Label(),
-                        defaultValue: Draft(DeviceConfigKeys.BluetoothKind) ?? "headset"
-                    )
-                );
+                fields.Add(KindField(type));
                 break;
             }
         }
@@ -469,6 +462,26 @@ internal sealed class DeviceConfigFlow(
                 ),
             },
         };
+
+    private ActionParameter KindField(DeviceType type) =>
+        ActionParameter.Choice(
+            DeviceConfigKeys.Kind,
+            KindOptions
+                .Select(o => new ActionParameterOption
+                {
+                    Value = DeviceConfigKeys.KindValue(o.Kind),
+                    Label = o.Label,
+                })
+                .ToArray(),
+            label: Strings.ConfigFlow.Device.Kind.Label(),
+            defaultValue: ResolvedKind(type)
+        );
+
+    private string ResolvedKind(DeviceType type) =>
+        Draft(DeviceConfigKeys.Kind)
+        ?? DeviceConfigKeys.KindValue(
+            type == DeviceType.Bluetooth ? BatterySourceKind.Headset : BatterySourceKind.Phone
+        );
 
     private string? ResolvedBluetoothName() =>
         Draft(DeviceConfigKeys.BluetoothNameCustom) ?? Draft(DeviceConfigKeys.BluetoothName);
@@ -522,9 +535,9 @@ internal sealed class DeviceConfigFlow(
         _draft[DeviceConfigKeys.Category] = DeviceConfigKeys.TypeToCategory(slot.Type);
         _draft[DeviceConfigKeys.AdbAddress] = slot.AdbAddress;
         _draft[DeviceConfigKeys.BluetoothName] = slot.BluetoothFriendlyName;
-        if (slot.Type == DeviceType.Bluetooth)
+        if (slot.Type is DeviceType.Bluetooth or DeviceType.AdbPhone)
         {
-            _draft[DeviceConfigKeys.BluetoothKind] = DeviceConfigKeys.KindValue(slot.Kind);
+            _draft[DeviceConfigKeys.Kind] = DeviceConfigKeys.KindValue(slot.Kind);
         }
 
         if (models.For(slot) is { } catalogEntry)
