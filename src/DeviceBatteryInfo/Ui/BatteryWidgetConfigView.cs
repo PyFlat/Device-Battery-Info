@@ -30,6 +30,7 @@ internal static class BatteryWidgetConfigView
         var showTrend = new UiState<bool>(current.ShowTrend);
         var showRingTrend = new UiState<bool>(current.ShowRingTrend);
         var lowThreshold = new UiState<double>(current.LowThreshold);
+        var thresholds = new UiState<UiThresholds>(current.Thresholds!);
         var ringSize = new UiState<double>(current.RingSize);
         var namePosition = new UiState<string>(
             BatteryWidgetOptions.NamePositionValue(current.NamePosition)
@@ -201,6 +202,36 @@ internal static class BatteryWidgetConfigView
         appearance.Add(
             Toggle("lowInRed", Strings.Widgets.Config.LowInRed.Label(), lowInRed, onlyCustom)
         );
+        UiValue<UiVisibleWhen> ColorsIn(params string[] values) =>
+            UiValue.Of(
+                new UiVisibleWhen
+                {
+                    ParameterName = "colors",
+                    Values = values,
+                    SiblingValue = () => colors.Value,
+                }
+            );
+        appearance.Add(
+            new UiThresholdsInput
+            {
+                Key = "thresholds",
+                Label = Strings.Widgets.Config.Thresholds.Label(),
+                Description = Strings.Widgets.Config.Thresholds.Description(),
+                Binding = Bind.To(thresholds),
+                Min = 0,
+                Max = 100,
+                Step = 1,
+                Unit = "%",
+                DefaultValue = UiValue.From(() =>
+                    BatteryWidgetOptions.LevelBands((int)Math.Round(lowThreshold.Value))
+                ),
+                SupportsReset = true,
+                VisibleWhen = ColorsIn(
+                    BatteryWidgetOptions.ColorsLevelsCharging,
+                    BatteryWidgetOptions.ColorsLevels
+                ),
+            }
+        );
         appearance.Add(
             new UiNumberInput
             {
@@ -211,6 +242,12 @@ internal static class BatteryWidgetConfigView
                 Step = 1,
                 ShowSlider = true,
                 Binding = Bind.To(lowThreshold),
+                VisibleWhen = ColorsIn(
+                    BatteryWidgetOptions.ColorsSimple,
+                    BatteryWidgetOptions.ColorsDevice,
+                    BatteryWidgetOptions.ColorsGradient,
+                    BatteryWidgetOptions.ColorsCustom
+                ),
             }
         );
         appearance.Add(

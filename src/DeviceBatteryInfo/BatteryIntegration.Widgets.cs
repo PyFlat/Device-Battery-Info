@@ -227,7 +227,7 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             : null;
     }
 
-    private static BatteryWidgetOptions ParseOptions(JsonElement? data)
+    internal static BatteryWidgetOptions ParseOptions(JsonElement? data)
     {
         if (data is not { ValueKind: JsonValueKind.Object } obj)
         {
@@ -309,6 +309,12 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 ? ringColorValue.GetString()!.ToUpperInvariant()
                 : BatteryWidgetRow.White;
 
+        var thresholds =
+            obj.TryGetProperty("thresholds", out var thresholdsValue)
+            && UiThresholds.TryParse(thresholdsValue, out var parsedThresholds)
+                ? parsedThresholds
+                : null;
+
         var appearance = UiWidgetAppearance.Read(obj);
 
         return new BatteryWidgetOptions(
@@ -331,7 +337,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             ringSize,
             namePosition,
             ringColor,
-            Flag("lowInRed", true)
+            Flag("lowInRed", true),
+            thresholds
         );
     }
 

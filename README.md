@@ -23,8 +23,10 @@ Each device is drawn with an icon for its kind and a coloured ring, with a bolt 
 charges. For adb and Bluetooth devices you pick the icon when adding the device (phone, tablet, VR
 headset, speaker and more). The colour scheme is a widget setting: by level with cyan while charging (the default), by
 level only, green only, by device type, a smooth gradient, or one custom colour of your choice (for
-a black and white board, say). In every scheme a level at or below the low-battery threshold is red,
-even while charging; only the custom colour lets you switch that off:
+a black and white board, say). The level schemes have a colour threshold bar where you move, recolour,
+add and remove the colour bands (by default red up to the low-battery threshold, then orange, yellow
+and green). In the other schemes a level at or below the low-battery threshold is red, even while
+charging; only the custom colour lets you switch that off:
 
 - **Battery panel** shows several devices at once, as a grid of rings that arranges itself to the
   widget's size (optionally with names), or as a list of rows with bars aligned to the top, centre or

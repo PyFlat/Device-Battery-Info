@@ -112,7 +112,27 @@ internal static class BatteryWidgetTypes
               "type": "string",
               "enum": ["levels-charging", "levels", "simple", "device", "gradient", "custom"],
               "default": "levels-charging",
-              "description": "Ring and bar colours. Every scheme shows a level at or below lowThreshold in red, except 'custom' with lowInRed off."
+              "description": "Ring and bar colours. The 'levels' schemes colour by 'thresholds'; every other scheme shows a level at or below lowThreshold in red, except 'custom' with lowInRed off."
+            },
+            "thresholds": {
+              "type": ["object", "null"],
+              "description": "The colour bands of the 'levels' and 'levels-charging' schemes, as the thresholds editor writes them. Absent or null means red up to lowThreshold, then orange, yellow from 41 and green from 61.",
+              "properties": {
+                "bands": {
+                  "type": "array",
+                  "description": "One to 64 bands, lowest first. Each runs from its 'from' up to the next band's; the first has no 'from'.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "color": { "type": "string", "description": "#rgb or #rrggbb." },
+                      "from": { "type": ["number", "null"] }
+                    },
+                    "required": ["id", "color"]
+                  }
+                }
+              },
+              "required": ["bands"]
             },
             "ringColor": {
               "type": "string",

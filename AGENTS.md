@@ -161,25 +161,40 @@ Design knowledge that is not obvious from the code alone:
   grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
   colour (`BatteryWidgetRow.Color` for the widget's `colors` scheme, all Apple system colours so every
   scheme has the same saturation, plus `custom`, one `ringColor` whose `lowInRed` switch is the only
-  way to drop the red; every scheme shows a level at or below the threshold in red even
-  while charging and a stale or unknown one in grey) and the percentage uses the primary text role. A ring is a full-turn `UiGauge`
+  way to drop the red; every scheme shows a stale or unknown level in grey) and the percentage uses the
+  primary text role. The two level schemes colour by `thresholds`, a `UiThresholdsInput` (SDK beta.16,
+  Macro Deck PR 1233) the user edits freely: null until edited, and then
+  `BatteryWidgetOptions.LevelBands(lowThreshold)`, red up to "Low battery at", orange, yellow from 41 and
+  green from 61, which is exactly the old fixed steps (a test checks every threshold and level). The
+  first band shows even while charging; above it `levels-charging` is cyan. The config form shows the
+  bar for the level schemes and the `lowThreshold` slider for the others, which still show a level at or
+  below it in red. The host saves only the fields the user edits, so the bar never writes
+  `lowThreshold` back: its defaults follow the slider until the user edits it. A ring is a full-turn `UiGauge`
   inside a `UiModifier` with `Frame.AspectRatio = 1` and a `UiLayer` for the gauge, the bolt and the
   face; the gauge is inset by half the bolt's height minus half its stroke, which puts a charging
   bolt exactly in the gap the gauge leaves at the top (`StartAngle`/`EndAngle`, 0 is up, clockwise).
   The face (glyph over percentage) must fit the gauge's inner circle, radius about 0.35 of the
   diameter: the corners of the percentage line are what collide, so check them, not just the height.
-  The ring fills its slot and the diameter only sizes its parts, so `ringSize` (50-100 %, default
-  100) shrinks a ring by capping its frame (`MaxWidth`/`MaxHeight`) at the scaled diameter and sizing
-  the parts from that; at 100 % the frame stays uncapped, so existing widgets render as before.
+  The ring fills its slot, so `ringSize` (50-100 %, default 100) shrinks a ring by capping its frame
+  (`MaxWidth`/`MaxHeight`) at that share of the full ring; at 100 % the frame stays uncapped, so
+  existing widgets render as before.
   `namePosition: "inside"` puts the name in the face under the percentage (the panel only with
   `showNames`): the glyph shrinks (`FaceGlyphNamed`), and the name sits in a `UiModifier` whose
   `MaxWidth` keeps its corners within the inner circle's chord at the bottom of the face, with a
   `MinSize` so a long name shrinks before it truncates. The line below the ring goes, and the stacked
   tile and `Arrange` give its room back to the ring. The wide tile keeps the name in its details.
-  Every `UiLength` is a fraction of the whole widget's basis, never of a grid cell, so the ring panel
-  estimates its ring diameter (`BatteryWidgetView.Arrange`: the column count that gives the largest
-  ring for the device count and aspect) and sizes each ring's parts reactively from that; a
-  `UiResponsive` picks the aspect bucket. The view builder rejects `Fill`/`MainSize` on a responsive
+  A ring's parts are `UiLength.OfParent` lengths (SDK beta.16, Macro Deck PR 1259): a fraction of the
+  shorter side of the box the parent lays the node out in (`BatteryWidgetView.RingPart`), so they scale
+  with the ring itself and not with the widget. The containing box is the parent's: a grid cell, a
+  layer's box, a stack's content box (so the gauge inside the `gauge-inset` padding uses the thickness
+  over `1 - 2 * GaugeInset`), and a modifier child gets none while measuring, so the in-ring name sits
+  in a slot with a `MainSize`. The ring panel is one `UiGrid` with `MinCellSize`, so the reader picks
+  the columns for any widget shape and every device is in the tree once (the six per-aspect copies
+  passed the host's 192 KiB `MaxUiTreeBytes` at ten devices; a test builds 30). The reader's rule takes
+  the largest square cell and the fewer columns on a tie, and knows nothing about the labels below a
+  ring, so the labels are sized as a share of the cell (`NameShare`, `TrendShare`). `Columns`, `Rows`
+  and every `OfParent` fallback basis come from `BatteryWidgetView.Arrange` at aspect 1: a reader
+  older than beta.16 draws that square arrangement at every shape. The view builder rejects `Fill`/`MainSize` on a responsive
   variant's root and on a modifier's child, and `BatteryWidgetViewTests` builds every layout through
   a real `UiView` to catch that. The list layout sizes the way the host's own Weather widget does:
   small type, `UiSize.FromBasis(fraction)` with a `maxOfCross` only as a safety rail; each row hugs
@@ -222,10 +237,10 @@ Design knowledge that is not obvious from the code alone:
   `BatteryWidgetOptions.BackgroundColor`/`TextColor`, the root stack's `Background` takes the stored
   value as is (`transparent` on the root drops the deck's tile face), and both descriptors declare
   them in `AppearanceProperties` so the Set Background Color / Set Label Color actions reach the
-  widgets. A text `Color` takes `#rrggbb` only (an 8-digit hex is ignored), so secondary and muted
-  text are mixed toward an opaque background (80 % and 60 %) and use the full colour over the theme's
-  face or a transparent one. `UiGauge` has no track colour, so the ring's empty track stays the
-  theme's on a custom background (accepted).
+  widgets. Secondary and muted text take the text colour with alpha (`#rrggbbCC`, `#rrggbb99`, SDK
+  beta.16) so they stay fainter over any backdrop; a reader older than beta.16 draws the role colour.
+  The gauge's `TrackColor` takes `#rrggbb` only, so it is the text colour mixed 20 % into a known opaque
+  background, and the theme's track over the tile face or a transparent background.
 - **Widget previews:** `Ui/BatteryWidgetPreviews.cs` has one `static` parameterless method per
   scenario, each `[UiPreview(name, View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]`
   returning a `UiElement`. `UiPreviewCatalog.Scan` (run by the hosting `ui` capability over the
