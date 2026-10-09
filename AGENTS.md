@@ -161,8 +161,15 @@ Design knowledge that is not obvious from the code alone:
   grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
   colour (`BatteryWidgetRow.Color` for the widget's `colors` scheme, all Apple system colours so every
   scheme has the same saturation, plus `custom`, one `ringColor` whose `lowInRed` switch is the only
-  way to drop the red; every scheme shows a level at or below the threshold in red even
-  while charging and a stale or unknown one in grey) and the percentage uses the primary text role. A ring is a full-turn `UiGauge`
+  way to drop the red; every scheme shows a stale or unknown level in grey) and the percentage uses the
+  primary text role. The two level schemes colour by `thresholds`, a `UiThresholdsInput` (SDK beta.16,
+  Macro Deck PR 1233) the user edits freely: null until edited, and then
+  `BatteryWidgetOptions.LevelBands(lowThreshold)`, red up to "Low battery at", orange, yellow from 41 and
+  green from 61, which is exactly the old fixed steps (a test checks every threshold and level). The
+  first band shows even while charging; above it `levels-charging` is cyan. The config form shows the
+  bar for the level schemes and the `lowThreshold` slider for the others, which still show a level at or
+  below it in red. The host saves only the fields the user edits, so the bar never writes
+  `lowThreshold` back: its defaults follow the slider until the user edits it. A ring is a full-turn `UiGauge`
   inside a `UiModifier` with `Frame.AspectRatio = 1` and a `UiLayer` for the gauge, the bolt and the
   face; the gauge is inset by half the bolt's height minus half its stroke, which puts a charging
   bolt exactly in the gap the gauge leaves at the top (`StartAngle`/`EndAngle`, 0 is up, clockwise).

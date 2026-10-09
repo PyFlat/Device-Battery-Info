@@ -1,5 +1,6 @@
 using System.Globalization;
 using DeviceBatteryInfo.Core;
+using MacroDeck.Ui.Config;
 
 namespace DeviceBatteryInfo.Ui;
 
@@ -47,19 +48,35 @@ internal sealed record BatteryWidgetRow(
     public const string White = "#FFFFFF";
 
     public string Color(BatteryWidgetOptions options) =>
-        Color(options.LowThreshold, options.Colors, options.RingColor, options.LowInRed);
+        Color(
+            options.LowThreshold,
+            options.Colors,
+            options.RingColor,
+            options.LowInRed,
+            options.Thresholds
+        );
 
     // Shapes take a hex only, so a custom colour that is not #rrggbb falls back to white.
     public string Color(
         int lowThreshold,
         BatteryColorScheme scheme = BatteryColorScheme.LevelsCharging,
         string? customColor = null,
-        bool lowInRed = true
+        bool lowInRed = true,
+        UiThresholds? thresholds = null
     )
     {
         if (Stale || Percent is not { } percent)
         {
             return Grey;
+        }
+
+        if (scheme is BatteryColorScheme.Levels or BatteryColorScheme.LevelsCharging)
+        {
+            var bands = thresholds ?? BatteryWidgetOptions.LevelBands(lowThreshold);
+            var inFirstBand = bands.Bands.Count > 1 && percent < bands.Bands[1].From;
+            return scheme == BatteryColorScheme.LevelsCharging && Charging && !inFirstBand
+                ? Cyan
+                : bands.ColorAt(percent)!.ToUpperInvariant();
         }
 
         var custom = IsHexColor(customColor) ? customColor!.ToUpperInvariant() : White;
@@ -71,24 +88,14 @@ internal sealed record BatteryWidgetRow(
         return scheme switch
         {
             BatteryColorScheme.Custom => custom,
-            BatteryColorScheme.Simple => Green,
-            BatteryColorScheme.Levels => StepColor(percent),
             BatteryColorScheme.Device => KindColors.GetValueOrDefault(Kind, Green),
             BatteryColorScheme.Gradient => GradientColor(percent, lowThreshold),
-            _ => Charging ? Cyan : StepColor(percent),
+            _ => Green,
         };
     }
 
     public static bool IsHexColor(string? value) =>
         value is { Length: 7 } && value[0] == '#' && value.Skip(1).All(char.IsAsciiHexDigit);
-
-    private static string StepColor(int percent) =>
-        percent switch
-        {
-            <= 40 => Orange,
-            <= 60 => Yellow,
-            _ => Green,
-        };
 
     // Red at the threshold to green at full.
     private static string GradientColor(int percent, int lowThreshold)
@@ -192,9 +199,38 @@ internal sealed record BatteryWidgetOptions(
     int RingSize = BatteryWidgetOptions.MaxRingSize,
     BatteryNamePosition NamePosition = BatteryNamePosition.Below,
     string RingColor = BatteryWidgetRow.White,
-    bool LowInRed = true
+    bool LowInRed = true,
+    UiThresholds? Thresholds = null
 )
 {
+    private const int OrangeFrom = 1;
+    private const int YellowFrom = 41;
+    private const int GreenFrom = 61;
+
+    public static UiThresholds LevelBands(int lowThreshold)
+    {
+        var bands = new List<UiThresholdBand> { new("red", BatteryWidgetRow.Red) };
+        foreach (
+            var (id, color, from) in new[]
+            {
+                ("orange", BatteryWidgetRow.Orange, OrangeFrom),
+                ("yellow", BatteryWidgetRow.Yellow, YellowFrom),
+                ("green", BatteryWidgetRow.Green, GreenFrom),
+            }
+        )
+        {
+            var start = Math.Max(from, lowThreshold + 1);
+            if (bands.Count > 1 && bands[^1].From >= start)
+            {
+                bands.RemoveAt(bands.Count - 1);
+            }
+
+            bands.Add(new UiThresholdBand(id, color, start));
+        }
+
+        return new UiThresholds(bands);
+    }
+
     public const string NameBelow = "below";
     public const string NameInside = "inside";
 

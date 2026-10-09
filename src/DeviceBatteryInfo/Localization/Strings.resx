@@ -191,6 +191,12 @@
     <data name="Widgets.Config.RingColor.Label" xml:space="preserve">
         <value>Ring colour</value>
     </data>
+    <data name="Widgets.Config.Thresholds.Label" xml:space="preserve">
+        <value>Colour thresholds</value>
+    </data>
+    <data name="Widgets.Config.Thresholds.Description" xml:space="preserve">
+        <value>Drag a handle to move where a colour starts. Click the bar to add a colour.</value>
+    </data>
     <data name="Widgets.Config.LowInRed.Label" xml:space="preserve">
         <value>Low battery in red</value>
     </data>

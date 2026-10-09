@@ -228,8 +228,6 @@ public sealed class BatteryWidgetViewTests
         }
     }
 
-    // Fainter text takes the colour with alpha, over any backdrop. The track takes #rrggbb only, so it is
-    // mixed toward an opaque background and left to the theme over any other.
     [Test]
     public void Custom_colours_reach_the_background_every_text_role_and_the_track()
     {
@@ -259,8 +257,6 @@ public sealed class BatteryWidgetViewTests
         }
     }
 
-    // One grid holds every device once, so the tree stays under the host's 192 KiB limit
-    // (ProtocolLimits.MaxUiTreeBytes); six aspect copies passed it at ten devices.
     [TestCase(false)]
     [TestCase(true)]
     public void The_ring_panel_stays_under_the_tree_size_limit_with_thirty_devices(bool named)
@@ -813,5 +809,137 @@ public sealed class BatteryWidgetViewTests
                 Is.EqualTo(mode)
             );
         }
+    }
+
+    [Test]
+    public void The_default_bands_keep_the_fixed_level_colours_for_every_low_threshold()
+    {
+        static string Before(int percent, int low, bool charging, BatteryColorScheme scheme)
+        {
+            if (percent <= low)
+            {
+                return BatteryWidgetRow.Red;
+            }
+
+            if (scheme == BatteryColorScheme.LevelsCharging && charging)
+            {
+                return BatteryWidgetRow.Cyan;
+            }
+
+            return percent switch
+            {
+                <= 40 => BatteryWidgetRow.Orange,
+                <= 60 => BatteryWidgetRow.Yellow,
+                _ => BatteryWidgetRow.Green,
+            };
+        }
+
+        foreach (var scheme in new[] { BatteryColorScheme.Levels, BatteryColorScheme.LevelsCharging })
+        {
+            foreach (var charging in new[] { false, true })
+            {
+                for (var low = 1; low <= 99; low++)
+                {
+                    for (var percent = 0; percent <= 100; percent++)
+                    {
+                        Assert.That(
+                            R("a", percent, charging).Color(low, scheme),
+                            Is.EqualTo(Before(percent, low, charging, scheme)),
+                            $"{scheme} low {low} at {percent}% charging {charging}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    [Test]
+    public void Edited_bands_decide_the_level_colours()
+    {
+        var bands = new MacroDeck.Ui.Config.UiThresholds(
+            [
+                new("low", "#5856d6"),
+                new("yellow", BatteryWidgetRow.Yellow, 15),
+                new("green", BatteryWidgetRow.Green, 30),
+            ]
+        );
+        const BatteryColorScheme levels = BatteryColorScheme.Levels;
+        const BatteryColorScheme charging = BatteryColorScheme.LevelsCharging;
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(R("a", 57).Color(20, levels, thresholds: bands), Is.EqualTo(BatteryWidgetRow.Green));
+            Assert.That(R("a", 20).Color(20, levels, thresholds: bands), Is.EqualTo(BatteryWidgetRow.Yellow));
+            Assert.That(R("a", 14).Color(20, levels, thresholds: bands), Is.EqualTo("#5856D6"));
+            Assert.That(R("a", 57, charging: true).Color(20, charging, thresholds: bands), Is.EqualTo(BatteryWidgetRow.Cyan));
+            Assert.That(R("a", 14, charging: true).Color(20, charging, thresholds: bands), Is.EqualTo("#5856D6"));
+            Assert.That(R("a", 57, stale: true).Color(20, levels, thresholds: bands), Is.EqualTo(BatteryWidgetRow.Grey));
+            Assert.That(R("a", 20).Color(20, BatteryColorScheme.Simple, thresholds: bands), Is.EqualTo(BatteryWidgetRow.Red));
+        }
+    }
+
+    [Test]
+    public void Stored_thresholds_reach_the_options_and_anything_invalid_means_the_defaults()
+    {
+        BatteryWidgetOptions Parse(string json) =>
+            BatteryIntegration.ParseOptions(JsonDocument.Parse(json).RootElement);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(
+                Parse("""{"thresholds":{"bands":[{"id":"red","color":"#ff3b30"},{"id":"green","color":"#34c759","from":50}]}}""")
+                    .Thresholds?.Bands.Select(b => b.From),
+                Is.EqualTo(new double?[] { null, 50 })
+            );
+            Assert.That(Parse("""{"thresholds":null}""").Thresholds, Is.Null);
+            Assert.That(Parse("""{"thresholds":{"bands":[]}}""").Thresholds, Is.Null);
+            Assert.That(Parse("""{}""").Thresholds, Is.Null);
+        }
+    }
+
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    [TestCase(BatteryWidgetTypes.TileId)]
+    public void The_threshold_bar_shows_for_the_level_schemes_and_the_low_slider_for_the_others(
+        string widgetId
+    )
+    {
+        var view = new UiView(
+            new UiSurface
+            {
+                Kind = UiSurfaceKinds.Config,
+                SessionMode = UiSessionModes.Exclusive,
+                Attributes = new Dictionary<string, JsonElement>(),
+            },
+            BatteryWidgetConfigView.Build(widgetId, BatteryWidgetOptions.Default, [])
+        );
+        var root = System.Text.Json.Nodes.JsonNode.Parse(
+            MacroDeck.Ui.Model.Serialization.UiCanonicalJson.Serialize(view.Tree.Root)
+        )!;
+
+        string[] ShownFor(string id)
+        {
+            System.Text.Json.Nodes.JsonNode? Find(System.Text.Json.Nodes.JsonNode node) =>
+                node["id"]!.GetValue<string>() == id
+                    ? node
+                    : (node["children"]?.AsArray() ?? [])
+                        .Select(child => Find(child!))
+                        .FirstOrDefault(found => found is not null);
+
+            return Find(root)!["properties"]!["visibleWhen"]!["values"]!
+                .AsArray()
+                .Select(v => v!.GetValue<string>())
+                .ToArray();
+        }
+
+        Assert.That(
+            ShownFor("thresholds"),
+            Is.EquivalentTo(new[] { BatteryWidgetOptions.ColorsLevelsCharging, BatteryWidgetOptions.ColorsLevels })
+        );
+        Assert.That(
+            ShownFor("lowThreshold").Concat(ShownFor("thresholds")),
+            Is.EquivalentTo(
+                Enum.GetValues<BatteryColorScheme>().Select(BatteryWidgetOptions.ColorsValue)
+            )
+        );
     }
 }
