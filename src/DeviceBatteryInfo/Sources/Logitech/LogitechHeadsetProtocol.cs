@@ -59,31 +59,6 @@ internal sealed class LogitechHeadsetProtocol()
         };
     }
 
-    // Linear between the calibration points, which is as much as a voltage reading is worth.
-    internal static int PercentFromMillivolts(int millivolts)
-    {
-        if (millivolts >= Curve[0].Millivolts)
-        {
-            return 100;
-        }
-
-        for (var i = 1; i < Curve.Length; i++)
-        {
-            var (low, lowPercent) = Curve[i];
-            if (millivolts < low)
-            {
-                continue;
-            }
-
-            var (high, highPercent) = Curve[i - 1];
-            return lowPercent
-                + (int)
-                    Math.Round(
-                        (millivolts - low) / (double)(high - low) * (highPercent - lowPercent),
-                        MidpointRounding.AwayFromZero
-                    );
-        }
-
-        return 0;
-    }
+    internal static int PercentFromMillivolts(int millivolts) =>
+        LogitechHidppProtocol.PercentFromMillivolts(millivolts, Curve);
 }
