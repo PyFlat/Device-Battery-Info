@@ -39,15 +39,11 @@ internal static class BatteryWidgetView
     private const double NameShare = 0.24;
     private const double TrendShare = 0.19;
 
-    // An aspect range of the rings' box and the aspect the ring sizes assume for it.
-    private static readonly (double? Min, double? Max, double Aspect)[] AspectBuckets =
-    [
-        (null, 0.7, 0.5),
-        (1.3, 1.8, 1.5),
-        (1.8, 2.6, 2.2),
-        (2.6, 3.6, 3.1),
-        (3.6, null, 4.4),
-    ];
+    // Only switches the reader to choosing the columns: the panel's grid always has a definite height.
+    private const double MinCell = 0.25;
+
+    // How much of the text colour the ring's track takes over the background.
+    private const double TrackStrength = 0.2;
 
     // The tree declares no press event: one would claim the gesture, and the host would then skip the
     // widget's flows and its default refresh action.
@@ -70,8 +66,8 @@ internal static class BatteryWidgetView
     private static UiValue<string> Background(BatteryWidgetOptions options) =>
         options.BackgroundColor is { } color ? UiValue.Of(color) : UiValue.None<string>();
 
-    // One stored text colour. The renderer takes #rrggbb only, so secondary and muted text are mixed
-    // toward a known opaque background; over the theme's face or a transparent one they use it as is.
+    // One stored text colour. Secondary and muted text take it at 80 % and 60 % alpha, so they stay fainter
+    // over any backdrop; a reader older than beta.16 draws their role colour instead.
     private static UiValue<string> TextColor(BatteryWidgetOptions options, string role)
     {
         if (options.TextColor is not { } color)
@@ -79,18 +75,23 @@ internal static class BatteryWidgetView
             return UiValue.None<string>();
         }
 
-        if (
-            role == UiComponentTextRoles.Primary
-            || !BatteryWidgetRow.IsHexColor(color)
-            || options.BackgroundColor is not { } background
-            || !BatteryWidgetRow.IsHexColor(background)
-        )
+        if (role == UiComponentTextRoles.Primary || !BatteryWidgetRow.IsHexColor(color))
         {
             return UiValue.Of(color);
         }
 
-        return UiValue.Of(Mix(color, background, role == UiComponentTextRoles.Secondary ? 0.8 : 0.6));
+        return UiValue.Of(color + (role == UiComponentTextRoles.Secondary ? "CC" : "99"));
     }
+
+    // A gauge track takes #rrggbb only, so it is the text colour mixed toward a known opaque background;
+    // over the theme's face or a transparent one the theme's track stays.
+    private static UiValue<string> TrackColor(BatteryWidgetOptions options) =>
+        options.TextColor is { } color
+        && BatteryWidgetRow.IsHexColor(color)
+        && options.BackgroundColor is { } background
+        && BatteryWidgetRow.IsHexColor(background)
+            ? UiValue.Of(Mix(color, background, TrackStrength))
+            : UiValue.None<string>();
 
     private static string Mix(string color, string background, double weight)
     {
@@ -199,36 +200,15 @@ internal static class BatteryWidgetView
             ],
         };
 
-    private static UiResponsive RingBody(UiState<BatteryWidgetModel> state, bool hasTitle) =>
-        new()
-        {
-            Key = "rings",
-            Fill = true,
-            Default = RingGrid(state, "rings-1", 1, hasTitle),
-            Variants = AspectBuckets
-                .Select(
-                    (bucket, index) =>
-                        new UiResponsiveVariant
-                        {
-                            MinAspect = bucket.Min,
-                            MaxAspect = bucket.Max,
-                            Content = RingGrid(state, $"rings-{index + 2}", bucket.Aspect, hasTitle),
-                        }
-                )
-                .ToArray(),
-        };
-
-    private static UiGrid RingGrid(
-        UiState<BatteryWidgetModel> state,
-        string key,
-        double aspect,
-        bool hasTitle
-    )
+    // One grid for every widget shape: the reader picks the columns (MinCellSize) and each ring sizes its
+    // parts from its own cell. Columns, Rows and the fallback lengths are the square arrangement, which is
+    // what a reader older than beta.16 draws at every shape.
+    private static UiGrid RingBody(UiState<BatteryWidgetModel> state, bool hasTitle)
     {
-        RingArrangement Arrangement() =>
+        RingArrangement Square() =>
             Arrange(
                 state.Value.Rows.Count,
-                aspect,
+                1,
                 hasTitle,
                 state.Value.Options.ShowNames && !state.Value.Options.NameInRing,
                 state.Value.Options.ShowRingTrend
@@ -236,9 +216,11 @@ internal static class BatteryWidgetView
 
         return new UiGrid
         {
-            Key = key,
-            Columns = UiValue.From(() => Arrangement().Columns),
-            Rows = UiValue.From(() => Arrangement().Rows),
+            Key = "rings",
+            Fill = true,
+            Columns = UiValue.From(() => Square().Columns),
+            Rows = UiValue.From(() => Square().Rows),
+            MinCellSize = UiSize.FromBasis(MinCell),
             Gap = UiSize.FromBasis(GridGap),
             Children =
             [
@@ -248,7 +230,7 @@ internal static class BatteryWidgetView
                     Items = UiValue.From(() => state.Value.Rows),
                     KeySelector = row => row.Id,
                     Template = (row, rowKey) =>
-                        RingCell(row, rowKey, state.Value.Options, () => Arrangement().Diameter),
+                        RingCell(row, rowKey, state.Value.Options, () => Square().Diameter),
                 },
             ],
         };
@@ -256,7 +238,8 @@ internal static class BatteryWidgetView
 
     internal readonly record struct RingArrangement(int Columns, int Rows, double Diameter);
 
-    // A tie goes to more columns, so two rings sit side by side.
+    // The fallback arrangement for readers that cannot choose the columns. A tie goes to more columns, so
+    // two rings sit side by side.
     internal static RingArrangement Arrange(
         int count,
         double aspect,
@@ -288,6 +271,8 @@ internal static class BatteryWidgetView
         return best;
     }
 
+    // The labels below take part of the cell, so the ring is assumed to be that much smaller than the
+    // cell's shorter side.
     private static UiStack RingCell(
         BatteryWidgetRow row,
         string key,
@@ -296,12 +281,20 @@ internal static class BatteryWidgetView
     )
     {
         var nameInside = options.ShowNames && options.NameInRing;
+        var share =
+            1
+            / (
+                1
+                + (options.ShowNames && !nameInside ? NameShare : 0)
+                + (options.ShowRingTrend ? TrendShare : 0)
+            );
         var children = new List<UiElement>
         {
             Ring(
                 row,
                 options,
                 diameter,
+                share,
                 showPercent: options.ShowPercent,
                 innerName: nameInside ? row.Name : null
             ),
@@ -314,7 +307,7 @@ internal static class BatteryWidgetView
                 {
                     Key = "name",
                     Text = row.Name,
-                    Size = OfDiameter(diameter, 0.15),
+                    Size = OfRing(diameter, 0.15, share),
                     Role = UiComponentTextRoles.Secondary,
                     Color = TextColor(options, UiComponentTextRoles.Secondary),
                     Weight = UiComponentTextWeights.Medium,
@@ -333,7 +326,7 @@ internal static class BatteryWidgetView
                 {
                     Key = "trend",
                     Text = row.Stale || string.IsNullOrEmpty(row.Trend) ? "–" : row.Trend,
-                    Size = OfDiameter(diameter, 0.12),
+                    Size = OfRing(diameter, 0.12, share),
                     Role = UiComponentTextRoles.Muted,
                     Color = TextColor(options, UiComponentTextRoles.Muted),
                     Align = UiComponentAlignments.Center,
@@ -349,20 +342,28 @@ internal static class BatteryWidgetView
             Direction = UiComponentDirections.Vertical,
             Justify = UiComponentJustify.Center,
             Align = UiComponentAlignments.Center,
-            Gap = OfDiameter(diameter, 0.05),
+            Gap = OfRing(diameter, 0.05, share),
             Children = children,
         };
     }
 
-    private static UiSize OfDiameter(Func<double> diameter, double fraction) =>
-        UiSize.From(() => UiLength.OfBasis(fraction * diameter()));
+    // `fraction` of the ring's diameter, where the ring is `share` of the containing box's shorter side.
+    // A reader that cannot resolve the box (older than beta.16, or an open extent) takes `fraction` of the
+    // estimated diameter, a fraction of the widget basis.
+    private static Func<UiLength> RingPart(Func<double> diameter, double fraction, double share = 1) =>
+        () => UiLength.OfParent(fraction * share, fraction * diameter());
 
-    // The ring fills its slot and `room` only estimates that slot, so a smaller ring caps its frame
-    // and sizes its parts from the capped diameter.
+    private static UiSize OfRing(Func<double> diameter, double fraction, double share = 1) =>
+        UiSize.From(RingPart(diameter, fraction, share));
+
+    // The ring fills its slot, so a smaller ring caps its frame at `ringSize` of the full ring, the slot's
+    // `share`. Its parts size from the ring's own box; `room` only estimates the full diameter for readers
+    // that cannot.
     private static UiModifier Ring(
         BatteryWidgetRow row,
         BatteryWidgetOptions options,
         Func<double> room,
+        double share,
         bool showPercent,
         string? innerName = null
     )
@@ -376,11 +377,12 @@ internal static class BatteryWidgetView
         var layers = new List<UiElement>();
         if (options.ShowBar)
         {
+            // The gauge's box is the ring minus the inset on both sides.
             layers.Add(
                 new UiStack
                 {
                     Key = "gauge-inset",
-                    Padding = OfDiameter(diameter, GaugeInset),
+                    Padding = OfRing(diameter, GaugeInset),
                     Children =
                     [
                         new UiGauge
@@ -391,7 +393,8 @@ internal static class BatteryWidgetView
                             StartAngle = gap,
                             EndAngle = 360 - gap,
                             LevelColor = color,
-                            Thickness = OfDiameter(diameter, RingThickness),
+                            TrackColor = TrackColor(options),
+                            Thickness = OfRing(diameter, RingThickness, 1 / (1 - (2 * GaugeInset))),
                         },
                     ],
                 }
@@ -407,7 +410,7 @@ internal static class BatteryWidgetView
                     Direction = UiComponentDirections.Vertical,
                     Justify = UiComponentJustify.Start,
                     Align = UiComponentAlignments.Center,
-                    Children = [Glyph("bolt", DeviceGlyphs.Bolt, color, diameter, BoltSize)],
+                    Children = [Glyph("bolt", DeviceGlyphs.Bolt, color, RingPart(diameter, BoltSize))],
                 }
             );
         }
@@ -419,14 +422,16 @@ internal static class BatteryWidgetView
                 "glyph",
                 DeviceGlyphs.For(row.Kind),
                 color,
-                diameter,
-                (showPercent, nameInside) switch
-                {
-                    (true, true) => FaceGlyphNamed,
-                    (false, true) => FaceGlyphNamedAlone,
-                    (true, false) => FaceGlyph,
-                    _ => FaceGlyphAlone,
-                }
+                RingPart(
+                    diameter,
+                    (showPercent, nameInside) switch
+                    {
+                        (true, true) => FaceGlyphNamed,
+                        (false, true) => FaceGlyphNamedAlone,
+                        (true, false) => FaceGlyph,
+                        _ => FaceGlyphAlone,
+                    }
+                )
             ),
         };
         if (showPercent)
@@ -436,7 +441,7 @@ internal static class BatteryWidgetView
                 {
                     Key = "pct",
                     Text = row.PercentText(),
-                    Size = OfDiameter(diameter, FacePercent),
+                    Size = OfRing(diameter, FacePercent),
                     Weight = UiComponentTextWeights.SemiBold,
                     Role = PercentRole(row),
                     Color = TextColor(options, PercentRole(row)),
@@ -448,23 +453,25 @@ internal static class BatteryWidgetView
         }
 
         // The bottom line is where the inner circle is narrowest, so the name gets a capped width
-        // and shrinks before it truncates.
+        // and shrinks before it truncates. The slot is one name line tall, a definite box the name
+        // sizes from: its shorter side is FaceName of the ring.
         if (innerName is not null)
         {
             face.Add(
                 new UiModifier
                 {
                     Key = "name-slot",
+                    MainSize = OfRing(diameter, FaceName),
                     Frame = UiValue.From(() => new UiFrame
                     {
-                        MaxWidth = UiLength.OfBasis(FaceNameWidth * diameter()),
+                        Width = RingPart(diameter, FaceNameWidth)(),
                     }),
                     Child = new UiTextRun
                     {
                         Key = "name",
                         Text = innerName,
-                        Size = OfDiameter(diameter, FaceName),
-                        MinSize = OfDiameter(diameter, FaceNameMin),
+                        Size = OfRing(diameter, FaceName, 1 / FaceName),
+                        MinSize = OfRing(diameter, FaceNameMin, 1 / FaceName),
                         Weight = UiComponentTextWeights.Medium,
                         Role = UiComponentTextRoles.Secondary,
                         Color = TextColor(options, UiComponentTextRoles.Secondary),
@@ -483,7 +490,7 @@ internal static class BatteryWidgetView
                 Direction = UiComponentDirections.Vertical,
                 Justify = UiComponentJustify.Center,
                 Align = UiComponentAlignments.Center,
-                Gap = OfDiameter(diameter, 0.02),
+                Gap = OfRing(diameter, 0.02),
                 Children = face,
             }
         );
@@ -496,7 +503,7 @@ internal static class BatteryWidgetView
                 scale < 1
                     ? UiValue.From(() =>
                     {
-                        var edge = UiLength.OfBasis(diameter());
+                        var edge = RingPart(room, scale, share)();
                         return new UiFrame
                         {
                             AspectRatio = 1,
@@ -509,21 +516,16 @@ internal static class BatteryWidgetView
         };
     }
 
-    private static UiModifier Glyph(
-        string key,
-        string path,
-        string color,
-        Func<double> diameter,
-        double fraction
-    ) =>
+    // A square glyph `edge` long.
+    private static UiModifier Glyph(string key, string path, string color, Func<UiLength> edge) =>
         new()
         {
             Key = key,
-            MainSize = OfDiameter(diameter, fraction),
+            MainSize = UiSize.From(edge),
             Frame = UiValue.From(() =>
             {
-                var edge = UiLength.OfBasis(fraction * diameter());
-                return new UiFrame { Width = edge, Height = edge };
+                var length = edge();
+                return new UiFrame { Width = length, Height = length };
             }),
             Child = new UiShape
             {
@@ -615,7 +617,7 @@ internal static class BatteryWidgetView
 
         var line = new List<UiElement>
         {
-            Glyph("glyph", DeviceGlyphs.For(row.Kind), color, () => 1, ListGlyph),
+            Glyph("glyph", DeviceGlyphs.For(row.Kind), color, () => UiLength.OfBasis(ListGlyph)),
             new UiStack
             {
                 Key = "namegroup",
@@ -630,7 +632,7 @@ internal static class BatteryWidgetView
         };
         if (options.ShowCharging && row.Charging)
         {
-            line.Add(Glyph("bolt", DeviceGlyphs.Bolt, color, () => 1, ListBolt));
+            line.Add(Glyph("bolt", DeviceGlyphs.Bolt, color, () => UiLength.OfBasis(ListBolt)));
         }
 
         if (options.ShowPercent)
@@ -759,6 +761,7 @@ internal static class BatteryWidgetView
                 row,
                 options,
                 () => diameter,
+                diameter / (1 - (2 * EdgeInset)),
                 options.ShowPercent,
                 innerName: nameInside ? row.Name : null
             ),
@@ -861,7 +864,11 @@ internal static class BatteryWidgetView
                     MainSize = diameter * options.RingScale,
                     Direction = UiComponentDirections.Vertical,
                     Justify = UiComponentJustify.Center,
-                    Children = [Ring(row, options, () => diameter, showPercent: false)],
+                    // The slot is already the scaled ring wide, so the full ring is 1 / scale of it.
+                    Children =
+                    [
+                        Ring(row, options, () => diameter, 1 / options.RingScale, showPercent: false),
+                    ],
                 },
                 new UiStack
                 {

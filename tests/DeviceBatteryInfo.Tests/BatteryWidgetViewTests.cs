@@ -228,9 +228,10 @@ public sealed class BatteryWidgetViewTests
         }
     }
 
-    // The renderer takes #rrggbb only, so fainter text is mixed toward an opaque background.
+    // Fainter text takes the colour with alpha, over any backdrop. The track takes #rrggbb only, so it is
+    // mixed toward an opaque background and left to the theme over any other.
     [Test]
-    public void Custom_colours_reach_the_background_and_every_text_role()
+    public void Custom_colours_reach_the_background_every_text_role_and_the_track()
     {
         var model = BatteryWidgetSamples.TileCustomColors();
         var colors = TextColors(model);
@@ -239,8 +240,9 @@ public sealed class BatteryWidgetViewTests
         {
             Assert.That(colors["background"], Is.EqualTo("#F2F2F7"));
             Assert.That(colors["pct"], Is.EqualTo("#1C1C1E"));
-            Assert.That(colors["name"], Is.EqualTo("#474749"));
-            Assert.That(colors["caption"], Is.EqualTo("#727275"));
+            Assert.That(colors["name"], Is.EqualTo("#1C1C1ECC"));
+            Assert.That(colors["caption"], Is.EqualTo("#1C1C1E99"));
+            Assert.That(colors["gauge"], Is.EqualTo("#C7C7CC"));
         }
 
         var unknownBackdrop = TextColors(
@@ -249,10 +251,76 @@ public sealed class BatteryWidgetViewTests
                 Options = model.Options with { BackgroundColor = "transparent" },
             }
         );
-        Assert.That(
-            new[] { unknownBackdrop["pct"], unknownBackdrop["name"], unknownBackdrop["caption"] },
-            Is.All.EqualTo("#1C1C1E")
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(unknownBackdrop["name"], Is.EqualTo("#1C1C1ECC"));
+            Assert.That(unknownBackdrop["caption"], Is.EqualTo("#1C1C1E99"));
+            Assert.That(unknownBackdrop, Does.Not.ContainKey("gauge"));
+        }
+    }
+
+    // One grid holds every device once, so the tree stays under the host's 192 KiB limit
+    // (ProtocolLimits.MaxUiTreeBytes); six aspect copies passed it at ten devices.
+    [TestCase(false)]
+    [TestCase(true)]
+    public void The_ring_panel_stays_under_the_tree_size_limit_with_thirty_devices(bool named)
+    {
+        var rows = Enumerable
+            .Range(0, 30)
+            .Select(i => new BatteryWidgetRow(
+                $"device-{i}",
+                $"Wireless Device {i}",
+                (i * 7) % 101,
+                i % 3 == 0 ? BatteryStatus.Charging : BatteryStatus.Discharging,
+                i % 3 == 0,
+                Stale: false,
+                TimeToFull: null,
+                Trend: "-3%/1h"
+            ))
+            .ToArray();
+        var options = BatteryWidgetOptions.Default with
+        {
+            Title = "Batteries",
+            ShowNames = named,
+            ShowRingTrend = named,
+        };
+
+        var json = MacroDeck.Ui.Model.Serialization.UiCanonicalJson.Serialize(
+            new UiView(
+                WidgetSurface(),
+                BatteryWidgetView.Build(
+                    BatteryWidgetTypes.PanelId,
+                    new UiState<BatteryWidgetModel>(new BatteryWidgetModel(rows, options)),
+                    16
+                )
+            ).Tree.Root
         );
+
+        Assert.That(System.Text.Encoding.UTF8.GetByteCount(json), Is.LessThan(196608));
+    }
+
+    [Test]
+    public void The_ring_panel_lets_the_reader_choose_its_columns()
+    {
+        var root = TreeJson(BatteryWidgetTypes.PanelId, BatteryWidgetSamples.PanelNamed());
+        var grids = new List<System.Text.Json.Nodes.JsonNode>();
+        void Walk(System.Text.Json.Nodes.JsonNode node)
+        {
+            if (node["type"]?.GetValue<string>() == "ui.grid")
+            {
+                grids.Add(node);
+            }
+
+            foreach (var child in node["children"]?.AsArray() ?? [])
+            {
+                Walk(child!);
+            }
+        }
+
+        Walk(root);
+
+        Assert.That(grids, Has.Count.EqualTo(1));
+        Assert.That(grids[0]["properties"]?["minCellSize"], Is.Not.Null);
     }
 
     // The ring fills its slot, so only a capped frame makes it smaller; full size keeps the old tree.
@@ -377,6 +445,11 @@ public sealed class BatteryWidgetViewTests
             if (node["properties"]?["color"] is { } color && leaf is "pct" or "name" or "caption")
             {
                 colors[leaf] = color.GetValue<string>();
+            }
+
+            if (node["properties"]?["trackColor"] is { } track && leaf is "gauge")
+            {
+                colors[leaf] = track.GetValue<string>();
             }
 
             foreach (var child in node["children"]?.AsArray() ?? [])

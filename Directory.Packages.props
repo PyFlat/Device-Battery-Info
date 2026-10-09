@@ -4,12 +4,12 @@
         <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     </PropertyGroup>
     <ItemGroup>
-        <PackageVersion Include="MacroDeck.Localization" Version="3.0.0-beta.15" />
-        <PackageVersion Include="MacroDeck.Plugin.Analyzers" Version="3.0.0-beta.15" />
-        <PackageVersion Include="MacroDeck.Plugin.Hosting" Version="3.0.0-beta.15" />
-        <PackageVersion Include="MacroDeck.Plugin.Serilog" Version="3.0.0-beta.15" />
-        <PackageVersion Include="MacroDeck.Plugin.Testing" Version="3.0.0-beta.15" />
-        <PackageVersion Include="MacroDeck.Sdk" Version="3.0.0-beta.15" />
+        <PackageVersion Include="MacroDeck.Localization" Version="3.0.0-beta.16" />
+        <PackageVersion Include="MacroDeck.Plugin.Analyzers" Version="3.0.0-beta.16" />
+        <PackageVersion Include="MacroDeck.Plugin.Hosting" Version="3.0.0-beta.16" />
+        <PackageVersion Include="MacroDeck.Plugin.Serilog" Version="3.0.0-beta.16" />
+        <PackageVersion Include="MacroDeck.Plugin.Testing" Version="3.0.0-beta.16" />
+        <PackageVersion Include="MacroDeck.Sdk" Version="3.0.0-beta.16" />
     </ItemGroup>
     <ItemGroup>
         <!-- Cross-platform HID access for feature-report battery reads (e.g. Razer wireless mice). -->
