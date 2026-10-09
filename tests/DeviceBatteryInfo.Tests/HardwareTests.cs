@@ -26,6 +26,7 @@ public sealed class HardwareTests
         new RazerProtocol(),
         new LogitechProtocol(),
         new LogitechHeadsetProtocol(),
+        new LogitechVoltageBatteryProtocol(),
         new CorsairProtocol(),
         new RapooProtocol(),
         new AulaProtocol(),

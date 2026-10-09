@@ -39,6 +39,9 @@ printf '%s\n' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1b1c", ATTRS{idProduct}=="0a75", TAG+="uaccess"' \
   '# Logitech G Pro X Wireless' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0aba", TAG+="uaccess"' \
+  '# Logitech G502 Lightspeed' \
+  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c539", TAG+="uaccess"' \
+  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c08d", TAG+="uaccess"' \
   '# Logitech G Pro X Superlight 2' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c54d", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c09b", TAG+="uaccess"' \

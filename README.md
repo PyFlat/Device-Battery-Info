@@ -103,6 +103,7 @@ listed here is not supported even if it shares a brand or protocol with one that
 | Razer    | Basilisk V3 Pro      | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
 | Razer    | Viper V2 Pro         | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
 | Razer    | Viper V3 Pro SE      | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
+| Logitech | G502 Lightspeed      | Mouse      | Receiver or cable | approx.   | yes      | Reports a voltage, so the percentage is an estimate.                                             |
 | Logitech | G Pro X Superlight 2 | Mouse      | Receiver or cable | yes       | yes      |                                                                                                  |
 | Logitech | G502 X PLUS          | Mouse      | Receiver or cable | yes       | yes      |                                                                                                  |
 | Logitech | G Pro X Wireless     | Headset    | Dongle            | approx.   | yes      | Reports a voltage, so the percentage is an estimate. It reads nothing while the headset is off.  |
