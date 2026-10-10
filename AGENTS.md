@@ -388,8 +388,8 @@ Design knowledge that is not obvious from the code alone:
   `LogitechVoltageBatteryProtocol`) have only `0x1001` (battery voltage): mV big-endian in bytes 4-5,
   then a flags byte where bit 7 is external power and, only while it is set, bits 0-2 are the charge
   state (`0` charging, `1` full, `2` not charging, else error) as the kernel reads it; bit 5 is the
-  critical level, never "full". Its curve is the kernel's 0x1001 table at Solaar's sample points,
-  again an estimate (G Hub uses its own per-device table). The `C539` receiver is shared by other
+  critical level, never "full". Its curve is the kernel's full 100-entry 0x1001 table, again
+  an estimate (G Hub uses its own per-device table); `HardwareTests` prints the raw mV for calibrating. The `C539` receiver is shared by other
   `0x1001` mice (G Pro Wireless, G703, G903), which would show under the G502 name. Ask the device for its feature table
   (`0x0001` getCount + getFeatureId) before assuming a feature index. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
   and checksum. **Only the DeathAdder V3 Pro has been tested on real hardware.** The command class

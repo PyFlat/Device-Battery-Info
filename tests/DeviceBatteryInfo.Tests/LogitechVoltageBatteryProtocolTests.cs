@@ -77,9 +77,11 @@ public sealed class LogitechVoltageBatteryProtocolTests
 
     [TestCase(4300, 100)]
     [TestCase(4186, 100)]
+    [TestCase(4133, 97)]
     [TestCase(3989, 80)]
     [TestCase(3900, 67)]
-    [TestCase(3500, 0)]
+    [TestCase(3537, 1)]
+    [TestCase(3536, 0)]
     [TestCase(3400, 0)]
     public void The_curve_interpolates_between_its_calibration_points(int millivolts, int percent)
     {

@@ -147,6 +147,24 @@ public sealed class HardwareTests
         Assert.That(read, Is.GreaterThan(0), "No supported HID device answered.");
     }
 
+    // For calibrating the 0x1001 curve against G Hub: the raw voltage behind the percentage.
+    [Test]
+    public async Task Reads_the_raw_logitech_battery_voltage()
+    {
+        var probe = new LogitechVoltageProbe();
+        var (_, sources) = await DiscoverAsync([probe]);
+        Assume.That(sources, Is.Not.Empty, "No Logitech mouse with a battery voltage is connected.");
+
+        foreach (var source in sources)
+        {
+            var reading = await source.ReadAsync(CancellationToken.None);
+            HardwareReport.Line(
+                $"{source.Id} {DateTime.Now:HH:mm:ss}",
+                $"{probe.Millivolts} mV flags 0x{probe.Flags:X2} = {reading.Percent}% {reading.Status}"
+            );
+        }
+    }
+
     // Stands in for Razer Synapse polling the same control interface.
     [Test]
     public async Task Reads_while_a_foreign_poller_hammers_the_same_interface()
@@ -235,6 +253,29 @@ public sealed class HardwareTests
             {
                 Thread.Sleep(20);
             }
+        }
+    }
+
+    private sealed class LogitechVoltageProbe() : LogitechHidppProtocol(0xFF00, 0x0002, 0x01)
+    {
+        private readonly LogitechVoltageBatteryProtocol _protocol = new();
+
+        public int Millivolts { get; private set; }
+
+        public byte Flags { get; private set; }
+
+        public override IReadOnlyList<HidDeviceInfo> Devices => _protocol.Devices;
+
+        protected override ushort BatteryFeature => 0x1001;
+
+        protected override byte BatteryFunction => 0x00;
+
+        protected override BatteryReading ParseBattery(ReadOnlySpan<byte> report)
+        {
+            var reading = LogitechVoltageBatteryProtocol.ParseVoltage(report);
+            Millivolts = report[4] << 8 | report[5];
+            Flags = report[6];
+            return reading;
         }
     }
 
