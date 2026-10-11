@@ -24,6 +24,9 @@ SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00aa", TAG+="ua
 # Razer Viper V2 Pro
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00a6", TAG+="uaccess"
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00a5", TAG+="uaccess"
+# Razer Viper V3 Pro SE
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00df", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00de", TAG+="uaccess"
 # Sony DualSense
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0ce6", TAG+="uaccess"
 # Sony DualSense over Bluetooth, which has no USB attributes (bus 0005 in the HID device name)

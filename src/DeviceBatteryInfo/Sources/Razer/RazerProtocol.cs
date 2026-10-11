@@ -25,7 +25,8 @@ internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, R
         [
             new("DeathAdder V3 Pro", 0x00B7, 0x00B6), 
             new("Basilisk V3 Pro", 0x00AB, 0x00AA),
-            new("Viper V2 Pro", 0x00A6, 0x00A5)
+            new("Viper V2 Pro", 0x00A6, 0x00A5),
+			new("Viper V3 Pro SE", 0x00DF, 0x00DE)
         ];
 
     public override async Task<BatteryReading> ReadAsync(
