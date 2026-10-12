@@ -102,10 +102,13 @@ public sealed class HardwareTests
     {
         foreach (var protocol in Protocols)
         {
-            var interfaces = DeviceList.Local.GetHidDevices(protocol.VendorId);
-            foreach (var hid in interfaces.OrderBy(d => d.ProductID).ThenBy(d => d.DevicePath))
+            IEnumerable<HidCandidate> interfaces = OperatingSystem.IsMacOS()
+                ? MacHid.Enumerate().Where(e => e.VendorId == protocol.VendorId).Select(HidSharpTransport.Describe)
+                : DeviceList
+                    .Local.GetHidDevices(protocol.VendorId)
+                    .Select(d => HidSharpTransport.Describe(d, withUsage: true));
+            foreach (var candidate in interfaces.OrderBy(c => c.ProductId).ThenBy(c => c.InterfaceNumber))
             {
-                var candidate = HidSharpTransport.Describe(hid, withUsage: true);
                 HardwareReport.Line(
                     $"{candidate.ProductName} ({candidate.ProductId:X4})",
                     $"interface {candidate.InterfaceNumber} usage {candidate.UsagePage:X4}:{candidate.Usage:X4} "

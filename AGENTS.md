@@ -92,8 +92,9 @@ tests/DeviceBatteryInfo.Tests/
   MacOsSourceTests.cs             pmset and system_profiler parsers, the Bluetooth snapshot, the system
                                   source
   LinuxSourceTests.cs             power_supply and BlueZ parsers, sysfs HID interface and unit keys
-  HidTransportPlatformTests.cs    macOS and Windows interface and unit keys, the bounded exchange on a fake
-                                  channel, vendor-collection matching
+  HidTransportPlatformTests.cs    macOS entry ids and descriptors (a captured G Pro X Wireless one), Windows
+                                  interface and unit keys, the bounded exchange on a fake channel,
+                                  vendor-collection matching
   BatteryRegistryTests.cs         registry update / stale / retain, and catalog id round-trips
   HardwareTests.cs                [Explicit, Category=Hardware]: lists Bluetooth and HID interfaces, reads
                                   every supported HID device through the plugin, and reads one again while a
@@ -363,7 +364,8 @@ Design knowledge that is not obvious from the code alone:
   "Supported devices" table in `README.md` and, for a USB HID model, the Linux udev rule and its copy in
   `docs/linux-setup.md`. See `docs/adding-a-device.md`.
 - **HID feature reports are shared plumbing plus a base family; Razer is the first protocol on it.**
-  `Sources/Hid/` holds `NativeHid` (raw `hid.dll` feature-report interop), `IHidTransport`/
+  `Sources/Hid/` holds `NativeHid` (raw `hid.dll` feature-report interop), `MacHid` (IOKit, see the
+  macOS paragraph below), `IHidTransport`/
   `HidSharpTransport` (enumeration plus a protocol-agnostic `ExchangeAsync` that retries until the
   caller's `isComplete` accepts the response) and `HidFamily`, the one family that runs every
   `HidProtocol`. It owns everything not specific to a protocol: finding candidates by USB id, probing
@@ -477,28 +479,39 @@ Design knowledge that is not obvious from the code alone:
   `IHidTransport.GetFeatureAsync`, which only reads; `ExchangeAsync` always writes a feature first,
   and writing `0x05` is something no reference implementation does. Lightbar, player LEDs, rumble
   and adaptive triggers live in output report `0x02` (USB) and are not used.
-- **HID on macOS uses HidSharp for the feature reports and enumeration, through `IFeatureChannel`.**
-  `HidSharpTransport` opens a device with `NativeHid` on Windows, `LinuxHidraw` on Linux and
-  `HidStream.SetFeature/GetFeature` on macOS; the loop, timing and buffer layout are unchanged apart
-  from those open/set/get call sites. HidSharp lists only devices with a real USB id on macOS (it returns
-  nothing on a Mac with only built-in Apple devices), paths look like
-  `.../IOUSBHostInterface@N/AppleUserUSBHostHIDDevice` with `N` in hex, and the feature report length
-  includes the report id like on Windows. A refused `Open` blocks for about a second inside HidSharp, so
-  off Windows the whole exchange (`ExchangeAsync` and `ExchangeReportsAsync`) runs in `Task.Run` bounded
-  by its budget. Budget expiry must be an `InvalidOperationException`, never an
+- **HID on macOS goes through IOKit directly (`Sources/Hid/MacHid.cs`), not through HidSharp.** HidSharp
+  lists a device by `IORegistryEntryGetPath` and reopens it by `IORegistryEntryFromPath`, both capped at a
+  512-byte `io_string_t`; a longer path fails with `kIOReturnBadArgument` and the device silently drops out
+  of the list. Measured: a G Pro X Wireless behind four hubs on an M5 Pro has a 512-byte path (its interface
+  node is named after the product, `PRO X Wireless Gaming Headset@3`, not `IOUSBHostInterface@3`), while the
+  same setup on an M2 Pro stays just under it, because the controller nodes at the start of the path are
+  named per chip. So `MacHid` enumerates `IOHIDDevice` services itself, a candidate's `Path` is
+  `IORegistryEntryID:<hex id>` (`MacHid.PathOf`), and a device is opened through `IORegistryEntryIDMatching`
+  plus `IOHIDDeviceCreate`/`IOHIDDeviceOpen`. Never derive anything from a macOS path: the interface number
+  is the `bInterfaceNumber` of the USB interface node above the device, `PhysicalUnitKey` uses the
+  `LocationID` (`HidCandidate.LocationId`), and the report lengths and collections come from the
+  `ReportDescriptor` property parsed by HidSharp's `ReportDescriptor` (its lengths include the report id, as
+  HidSharp reported them). Feature reports use `IOHIDDeviceSetReport`/`GetReport` (`MacFeatureChannel`)
+  with hidapi's convention: an unnumbered report (id 0) goes out without its id byte and is read in after
+  it. Input reports arrive through `IOHIDDeviceRegisterInputReportCallback` on the run loop of the thread
+  that registered it, scheduled in a private run-loop mode, so `MacReportStream` opens, writes and reads on
+  one thread inside the bounded `Task.Run`; an unnumbered input report gets a leading 0, like on Windows.
+  Windows and Linux still go through HidSharp (`HidSharpReportStream`). A refused HidSharp `Open` blocks
+  for about a second and an IOKit call can stall too, so off Windows the whole exchange (`ExchangeAsync` and `ExchangeReportsAsync`) runs in `Task.Run`
+  bounded by its budget. Budget expiry must be an `InvalidOperationException`, never an
   `OperationCanceledException`: `HidFamily`, `DeviceFamilyProvider` and
   `BatteryPollingService.DiscoverAsync` let a cancellation escape, which aborts the poll for every
   source. The abandoned task ends on its own and disposes its channel; a probe costs at most the
   exchanges of the protocol's `ReadAsync` times `HidChannel.ProbeBudget`, and a device that stays refused
   pays that on every poll. A blank or all-zero serial (the Razer reports `000000000000`) does not
-  identify a unit, so `PhysicalUnitKey` falls back to the Windows parent-instance token or the macOS path
-  above `/IOUSBHostInterface@`. macOS also presents one device per interface with every top-level
-  collection inside it (the G Pro X Wireless has consumer control, `FF43:0202` and `FF00:0001` in one),
-  where Windows presents one device per collection, so `HidCandidate.Usages` lists all of them and
-  `HidFamily` matches a vendor collection anywhere in the list; the HID++ write there must be as long as
-  that report id (`OutputReportLength`), not the longest output report of the interface. Read on macOS:
-  Razer Basilisk V3 Pro (cable and dongle) and the Logitech G Pro X Wireless headset; the Logitech mice
-  are unverified there.
+  identify a unit, so `PhysicalUnitKey` falls back to the Windows parent-instance token or the macOS
+  `LocationID`. macOS presents one device per interface with every top-level collection inside it (the G
+  Pro X Wireless has consumer control, `FF43:0202` and `FF00:0001` in one), where Windows presents one
+  device per collection, so `HidCandidate.Usages` lists all of them and `HidFamily` matches a vendor
+  collection anywhere in the list; the HID++ write there must be as long as that report id
+  (`OutputReportLength`), not the longest output report of the interface. Read on macOS: Razer Basilisk V3 Pro (cable and
+  dongle, the cable only through the earlier HidSharp path) and the Logitech G Pro X Wireless headset (macOS
+  26, M5 Pro, behind a hub cascade, through IOKit); the Logitech mice are unverified there.
 - **Linux reads files and D-Bus, and needs a udev rule for HID.** `PowerSupplyBatteryParser` reads
   `/sys/class/power_supply/*/uevent` (no process): `TYPE=Battery` only, never `SCOPE=Device` (a
   peripheral the kernel drives, such as a Logitech mouse through hid-logitech-hidpp) and never

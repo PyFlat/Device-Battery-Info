@@ -148,10 +148,9 @@ internal sealed class HidFamily(
             return "s:" + serial.ToLowerInvariant();
         }
 
-        var interfaceNode = candidate.Path.IndexOf("/IOUSBHostInterface@", StringComparison.Ordinal);
-        if (interfaceNode > 0)
+        if (candidate.LocationId is { } location)
         {
-            return "m:" + candidate.Path[..interfaceNode].ToLowerInvariant();
+            return "m:" + location.ToString("x8", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         var linux = HidSharpTransport.LinuxUsbInterfacePattern().Match(candidate.Path);
