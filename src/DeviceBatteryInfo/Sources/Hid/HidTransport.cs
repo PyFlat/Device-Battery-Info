@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using HidSharp;
+using HidSharp.Reports;
 using Serilog;
 
 namespace DeviceBatteryInfo.Sources.Hid;
@@ -17,7 +18,8 @@ internal sealed record HidCandidate(
     int OutputReportLength = 0,
     int? UsagePage = null,
     int? Usage = null,
-    IReadOnlyList<(int Page, int Usage)>? Usages = null
+    IReadOnlyList<(int Page, int Usage)>? Usages = null,
+    long? LocationId = null
 )
 {
     // macOS and Linux present one device per interface with every top-level collection inside it, Windows one
@@ -62,8 +64,12 @@ internal interface IHidTransport
     );
 
     // Reads one feature report without writing anything first (unlike ExchangeAsync).
-    Task<byte[]> GetFeatureAsync(string devicePath, byte reportId, CancellationToken cancellationToken) =>
-        throw new NotSupportedException();
+    Task<byte[]> GetFeatureAsync(
+        string devicePath,
+        byte reportId,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    ) => throw new NotSupportedException();
 }
 
 internal sealed partial class HidSharpTransport : IHidTransport
@@ -99,13 +105,11 @@ internal sealed partial class HidSharpTransport : IHidTransport
     private static IFeatureChannel OpenPlatformChannel(string devicePath) =>
         OperatingSystem.IsWindows() ? new NativeFeatureChannel(NativeHid.Open(devicePath))
         : OperatingSystem.IsLinux() ? new LinuxFeatureChannel(LinuxHidraw.Open(devicePath))
-        : new HidSharpFeatureChannel(devicePath);
+        : OperatingSystem.IsMacOS() ? new MacFeatureChannel(MacHid.Open(devicePath))
+        : throw new PlatformNotSupportedException();
 
-    [GeneratedRegex(
-        @"mi_(?<n>[0-9a-fA-F]{1,2})|IOUSBHostInterface@(?<n>[0-9a-fA-F]+)",
-        RegexOptions.IgnoreCase
-    )]
-    private static partial Regex InterfacePattern();
+    [GeneratedRegex(@"mi_(?<n>[0-9a-fA-F]{1,2})", RegexOptions.IgnoreCase)]
+    private static partial Regex WindowsInterfacePattern();
 
     // Linux paths are sysfs paths through the USB interface node, "<port>:<config>.<interface>" in decimal,
     // e.g. /sys/devices/.../usb1/1-5/1-5.3/1-5.3:1.1/0003:1532:00B7.0002/hidraw/hidraw1.
@@ -118,9 +122,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
         int? interfaceNumber,
         int minFeatureReportLength
     ) =>
-        DeviceList
-            .Local.GetHidDevices(vendorId, productId)
-            .Select(d => Describe(d, withUsage: true))
+        ListDevices(vendorId, productId, withUsage: true)
             .Where(c => c.CouldNotOpen || c.FeatureReportLength >= minFeatureReportLength)
             .Where(c => interfaceNumber is null || c.InterfaceNumber == interfaceNumber)
             // Which HID collection answers varies by model, so try them in ascending order and let the caller's
@@ -129,13 +131,30 @@ internal sealed partial class HidSharpTransport : IHidTransport
             .ToArray();
 
     public IReadOnlyList<HidCandidate> ListFeatureReportDevices() =>
-        DeviceList
-            .Local.GetHidDevices()
-            .Select(d => Describe(d))
+        ListDevices(vendorId: null, productId: null, withUsage: false)
             .Where(c => c.FeatureReportLength > 0)
             .OrderBy(c => c.ProductName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(c => c.InterfaceNumber ?? int.MaxValue)
             .ToArray();
+
+    private static IEnumerable<HidCandidate> ListDevices(int? vendorId, int? productId, bool withUsage) =>
+        OperatingSystem.IsMacOS()
+            ? MacHid.Enumerate(vendorId, productId).Select(Describe)
+            : DeviceList.Local.GetHidDevices(vendorId, productId).Select(d => Describe(d, withUsage));
+
+    private static HidDevice? FindHidSharpDevice(string devicePath) =>
+        DeviceList
+            .Local.GetHidDevices()
+            .FirstOrDefault(d => string.Equals(d.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
+
+    private static int? FeatureReportLength(string devicePath) =>
+        (
+            OperatingSystem.IsMacOS()
+                ? ParseDescriptor(MacHid.ReportDescriptor(devicePath))?.MaxFeatureReportLength
+                : FindHidSharpDevice(devicePath)?.GetMaxFeatureReportLength()
+        ) is > 0 and var length
+            ? length
+            : null;
 
     public Task<byte[]> ExchangeAsync(
         string devicePath,
@@ -197,14 +216,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
         CancellationToken cancellationToken
     )
     {
-        var reportLength =
-            DeviceList
-                .Local.GetHidDevices()
-                .FirstOrDefault(d =>
-                    string.Equals(d.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
-                )
-                ?.GetMaxFeatureReportLength()
-            ?? request.Length + 1;
+        var reportLength = FeatureReportLength(devicePath) ?? request.Length + 1;
 
         // hidapi prepends a report-id byte: the request lands at offset 1 when the report length carries it,
         // otherwise at 0.
@@ -251,22 +263,28 @@ internal sealed partial class HidSharpTransport : IHidTransport
     public Task<byte[]> GetFeatureAsync(
         string devicePath,
         byte reportId,
+        TimeSpan budget,
         CancellationToken cancellationToken
-    )
+    ) =>
+        BoundAsync(
+            $"HID feature-report read on {devicePath}",
+            budget,
+            ct => Task.FromResult(ReadFeature(devicePath, reportId, ct)),
+            cancellationToken
+        );
+
+    private byte[] ReadFeature(string devicePath, byte reportId, CancellationToken cancellationToken)
     {
-        var device =
-            DeviceList
-                .Local.GetHidDevices()
-                .FirstOrDefault(d =>
-                    string.Equals(d.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
-                ) ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
+        var reportLength =
+            FeatureReportLength(devicePath)
+            ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
 
         cancellationToken.ThrowIfCancellationRequested();
-        var report = new byte[device.GetMaxFeatureReportLength()];
+        var report = new byte[reportLength];
         report[0] = reportId;
         using var channel = _openFeatureChannel(devicePath);
         channel.Get(report);
-        return Task.FromResult(report);
+        return report;
     }
 
     private static TimeSpan SettleDelay(int attempt) =>
@@ -285,7 +303,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
             )
         );
 
-    private const int ReportReadTimeoutMs = 250;
+    private static readonly TimeSpan ReportReadTimeout = TimeSpan.FromMilliseconds(250);
 
     public Task<byte[]> ExchangeReportsAsync(
         string devicePath,
@@ -307,26 +325,17 @@ internal sealed partial class HidSharpTransport : IHidTransport
         Func<byte[], bool> isComplete,
         TimeSpan budget,
         CancellationToken cancellationToken
-    )
-    {
-        var device =
-            DeviceList
-                .Local.GetHidDevices()
-                .FirstOrDefault(d =>
-                    string.Equals(d.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
-                ) ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
-
-        return await Task.Run(
+    ) =>
+        await Task.Run(
             () =>
             {
-                using var stream = device.Open();
+                using var stream = OpenReportStream(devicePath);
                 cancellationToken.ThrowIfCancellationRequested();
-                stream.ReadTimeout = ReportReadTimeoutMs;
 
                 // An empty request only listens, for a device that pushes its state on its own (Rapoo).
                 if (request.Length > 0)
                 {
-                    var output = new byte[Math.Max(OutputReportLength(device, request), request.Length)];
+                    var output = new byte[Math.Max(stream.OutputReportLength(request[0]), request.Length)];
                     request.CopyTo(output, 0);
                     stream.Write(output);
                 }
@@ -336,12 +345,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    var input = new byte[device.GetMaxInputReportLength()];
-                    try
-                    {
-                        stream.Read(input);
-                    }
-                    catch (TimeoutException)
+                    if (stream.Read(ReportReadTimeout) is not { } input)
                     {
                         continue;
                     }
@@ -364,34 +368,31 @@ internal sealed partial class HidSharpTransport : IHidTransport
             },
             cancellationToken
         );
+
+    private static IReportStream OpenReportStream(string devicePath)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            var macDevice = MacHid.Open(devicePath);
+            return new MacReportStream(macDevice, ParseDescriptor(macDevice.ReportDescriptor));
+        }
+
+        var device =
+            FindHidSharpDevice(devicePath)
+            ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
+        return new HidSharpReportStream(device);
     }
 
     // Off Windows one device carries every collection, so its longest output report is not the length of the
     // report being sent and the device would ignore a padded one.
-    private static int OutputReportLength(HidDevice device, byte[] request)
-    {
-        var longest = device.GetMaxOutputReportLength();
-        if (OperatingSystem.IsWindows() || request.Length == 0)
-        {
-            return longest;
-        }
-
-        try
-        {
-            return OutputReportLength(
-                device
-                    .GetReportDescriptor()
-                    .DeviceItems.SelectMany(i => i.OutputReports)
-                    .Select(r => (r.ReportID, r.Length)),
-                request[0],
+    internal static int OutputReportLength(ReportDescriptor? descriptor, byte reportId, int longest) =>
+        OperatingSystem.IsWindows() || descriptor is null
+            ? longest
+            : OutputReportLength(
+                descriptor.DeviceItems.SelectMany(i => i.OutputReports).Select(r => (r.ReportID, r.Length)),
+                reportId,
                 longest
             );
-        }
-        catch (Exception exception) when (exception is not OutOfMemoryException)
-        {
-            return longest;
-        }
-    }
 
     internal static int OutputReportLength(
         IEnumerable<(byte ReportId, int Length)> reports,
@@ -407,7 +408,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
             return int.Parse(linux.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        var match = InterfacePattern().Match(devicePath);
+        var match = WindowsInterfacePattern().Match(devicePath);
         return match.Success
             ? int.Parse(match.Groups["n"].Value, System.Globalization.NumberStyles.HexNumber, null)
             : null;
@@ -444,6 +445,45 @@ internal sealed partial class HidSharpTransport : IHidTransport
         );
     }
 
+    internal static HidCandidate Describe(MacHidEntry entry)
+    {
+        var descriptor = ParseDescriptor(entry.ReportDescriptor);
+        var usages = descriptor is null ? null : TopLevelUsages(descriptor);
+
+        return new HidCandidate(
+            entry.Path,
+            entry.VendorId,
+            entry.ProductId,
+            entry.InterfaceNumber,
+            string.IsNullOrWhiteSpace(entry.Product) ? "HID device" : entry.Product.Trim(),
+            descriptor?.MaxFeatureReportLength ?? 0,
+            string.IsNullOrWhiteSpace(entry.SerialNumber) ? null : entry.SerialNumber.Trim(),
+            descriptor?.MaxInputReportLength ?? 0,
+            descriptor?.MaxOutputReportLength ?? 0,
+            usages is { Count: > 0 } ? usages[0].Page : null,
+            usages is { Count: > 0 } ? usages[0].Usage : null,
+            usages,
+            entry.LocationId
+        );
+    }
+
+    private static ReportDescriptor? ParseDescriptor(byte[]? descriptor)
+    {
+        if (descriptor is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        try
+        {
+            return new ReportDescriptor(descriptor);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
     private static int SafeLength(Func<int> length)
     {
         try
@@ -460,19 +500,20 @@ internal sealed partial class HidSharpTransport : IHidTransport
     {
         try
         {
-            return
-            [
-                .. device
-                    .GetReportDescriptor()
-                    .DeviceItems.SelectMany(i => i.Usages.GetAllValues())
-                    .Select(value => ((int)(value >> 16), (int)(value & 0xFFFF))),
-            ];
+            return TopLevelUsages(device.GetReportDescriptor());
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             return null;
         }
     }
+
+    private static IReadOnlyList<(int Page, int Usage)> TopLevelUsages(ReportDescriptor descriptor) =>
+        [
+            .. descriptor
+                .DeviceItems.SelectMany(i => i.Usages.GetAllValues())
+                .Select(value => ((int)(value >> 16), (int)(value & 0xFFFF))),
+        ];
 
     private static string SafeName(HidDevice device)
     {
@@ -499,4 +540,84 @@ internal sealed partial class HidSharpTransport : IHidTransport
             return null;
         }
     }
+}
+
+// One opened interface for the output/input report exchange.
+internal interface IReportStream : IDisposable
+{
+    int OutputReportLength(byte reportId);
+
+    void Write(byte[] report);
+
+    // Null when no report arrived within the timeout.
+    byte[]? Read(TimeSpan timeout);
+}
+
+internal sealed class HidSharpReportStream(HidDevice device) : IReportStream
+{
+    private readonly HidStream _stream = device.Open();
+
+    public int OutputReportLength(byte reportId)
+    {
+        var longest = device.GetMaxOutputReportLength();
+        try
+        {
+            return HidSharpTransport.OutputReportLength(device.GetReportDescriptor(), reportId, longest);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return longest;
+        }
+    }
+
+    public void Write(byte[] report) => _stream.Write(report);
+
+    public byte[]? Read(TimeSpan timeout)
+    {
+        _stream.ReadTimeout = (int)timeout.TotalMilliseconds;
+        var input = new byte[device.GetMaxInputReportLength()];
+        try
+        {
+            _stream.Read(input);
+            return input;
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+    }
+
+    public void Dispose() => _stream.Dispose();
+}
+
+[System.Runtime.Versioning.SupportedOSPlatform("macos")]
+internal sealed class MacReportStream : IReportStream
+{
+    private readonly MacHidDevice _device;
+    private readonly ReportDescriptor? _descriptor;
+
+    public MacReportStream(MacHidDevice device, ReportDescriptor? descriptor)
+    {
+        _device = device;
+        _descriptor = descriptor;
+        try
+        {
+            var usesReportIds = descriptor?.Reports.Any(r => r.ReportID != 0) ?? true;
+            device.ListenForInputReports(Math.Max(descriptor?.MaxInputReportLength ?? 0, 64), !usesReportIds);
+        }
+        catch
+        {
+            device.Dispose();
+            throw;
+        }
+    }
+
+    public int OutputReportLength(byte reportId) =>
+        HidSharpTransport.OutputReportLength(_descriptor, reportId, _descriptor?.MaxOutputReportLength ?? 0);
+
+    public void Write(byte[] report) => _device.SetReport(MacHidReportType.Output, report);
+
+    public byte[]? Read(TimeSpan timeout) => _device.ReadInputReport(timeout);
+
+    public void Dispose() => _device.Dispose();
 }

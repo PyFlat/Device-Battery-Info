@@ -110,6 +110,7 @@ public sealed class SonyProtocolTests
         public Task<byte[]> GetFeatureAsync(
             string devicePath,
             byte reportId,
+            TimeSpan budget,
             CancellationToken cancellationToken
         )
         {

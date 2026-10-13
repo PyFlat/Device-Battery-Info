@@ -116,9 +116,9 @@ which macOS 12 and later are expected to produce (checked on macOS 27). A connec
 in `system_profiler` itself, such as earbuds, has not been seen on real hardware; a Logitech MX Master 3S
 was read through `pmset -g accps`.
 
-USB HID devices (the catalog models above) are read on macOS through the same HID code as on
-Windows. That was checked on macOS with a Razer Basilisk V3 Pro (cable and dongle) and a Logitech G Pro X
-Wireless headset. macOS can ask for **Input Monitoring** before an application may open some HID
+USB HID devices (the catalog models above) are read on macOS through IOKit directly, with the same
+protocols as on Windows, so a device behind a dock or a cascade of hubs is found too. That was checked on
+macOS with a Razer Basilisk V3 Pro (cable and dongle) and a Logitech G Pro X Wireless headset. macOS can ask for **Input Monitoring** before an application may open some HID
 interfaces; if a device stays unavailable, allow Macro Deck under System Settings > Privacy & Security >
 Input Monitoring. The Logitech mice have not been tried on macOS.
 

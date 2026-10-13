@@ -56,7 +56,7 @@ internal sealed class HidChannel(
             );
 
     public Task<byte[]> GetFeatureAsync(byte reportId, CancellationToken cancellationToken) =>
-        transport.GetFeatureAsync(devicePath, reportId, cancellationToken);
+        transport.GetFeatureAsync(devicePath, reportId, budget ?? ReadBudget, cancellationToken);
 }
 
 // Subclass it, list the devices and implement ReadAsync. Finding the device is done for you.

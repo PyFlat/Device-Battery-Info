@@ -1,5 +1,4 @@
 using System.Runtime.Versioning;
-using HidSharp;
 using Microsoft.Win32.SafeHandles;
 
 namespace DeviceBatteryInfo.Sources.Hid;
@@ -32,24 +31,12 @@ internal sealed class LinuxFeatureChannel(SafeFileHandle handle) : IFeatureChann
     public void Dispose() => handle.Dispose();
 }
 
-internal sealed class HidSharpFeatureChannel : IFeatureChannel
+[SupportedOSPlatform("macos")]
+internal sealed class MacFeatureChannel(MacHidDevice device) : IFeatureChannel
 {
-    private readonly HidStream _stream;
+    public void Set(byte[] report) => device.SetReport(MacHidReportType.Feature, report);
 
-    public HidSharpFeatureChannel(string devicePath)
-    {
-        var device =
-            DeviceList
-                .Local.GetHidDevices()
-                .FirstOrDefault(d =>
-                    string.Equals(d.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase)
-                ) ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
-        _stream = device.Open();
-    }
+    public void Get(byte[] report) => device.GetFeature(report);
 
-    public void Set(byte[] report) => _stream.SetFeature(report);
-
-    public void Get(byte[] report) => _stream.GetFeature(report);
-
-    public void Dispose() => _stream.Dispose();
+    public void Dispose() => device.Dispose();
 }
