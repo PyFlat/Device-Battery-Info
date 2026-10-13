@@ -103,7 +103,7 @@ public sealed class HardwareTests
         foreach (var protocol in Protocols)
         {
             IEnumerable<HidCandidate> interfaces = OperatingSystem.IsMacOS()
-                ? MacHid.Enumerate().Where(e => e.VendorId == protocol.VendorId).Select(HidSharpTransport.Describe)
+                ? MacHid.Enumerate(protocol.VendorId).Select(HidSharpTransport.Describe)
                 : DeviceList
                     .Local.GetHidDevices(protocol.VendorId)
                     .Select(d => HidSharpTransport.Describe(d, withUsage: true));

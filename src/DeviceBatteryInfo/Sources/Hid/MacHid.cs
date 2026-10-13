@@ -22,9 +22,8 @@ internal enum MacHidReportType
     Feature = 2,
 }
 
-// IOKit's HID API directly. HidSharp lists and reopens a device by its IORegistry path, which IOKit returns
-// only up to 511 bytes: a G Pro X Wireless behind a hub cascade on an M5 Pro has a 512-byte path and silently
-// drops out of the list. The registry entry id has no such limit.
+// IOKit directly: HidSharp's IORegistry paths are capped at 511 bytes, a deep hub cascade exceeds that and the
+// device silently drops out. The registry entry id has no such limit.
 internal static class MacHid
 {
     internal const string IOKit = "/System/Library/Frameworks/IOKit.framework/IOKit";
@@ -33,7 +32,6 @@ internal static class MacHid
 
     private const string PathPrefix = "IORegistryEntryID:";
     private const uint MainPort = 0;
-    private const uint IterateRecursively = 1;
     private const uint IterateParents = 2;
     private const nint NumberSInt64Type = 4;
     internal const uint Utf8Encoding = 0x08000100;
@@ -54,7 +52,7 @@ internal static class MacHid
     }
 
     [SupportedOSPlatform("macos")]
-    internal static IReadOnlyList<MacHidEntry> Enumerate()
+    internal static IReadOnlyList<MacHidEntry> Enumerate(int? vendorId = null, int? productId = null)
     {
         if (IOServiceGetMatchingServices(MainPort, IOServiceMatching(CString("IOHIDDevice")), out var iterator) != 0)
         {
@@ -69,7 +67,7 @@ internal static class MacHid
             {
                 try
                 {
-                    if (Describe(service) is { } entry)
+                    if (Describe(service, vendorId, productId) is { } entry)
                     {
                         entries.Add(entry);
                     }
@@ -89,7 +87,7 @@ internal static class MacHid
     }
 
     [SupportedOSPlatform("macos")]
-    internal static MacHidEntry? Find(string path)
+    internal static byte[]? ReportDescriptor(string path)
     {
         var service = MatchingService(path);
         if (service == 0)
@@ -99,7 +97,7 @@ internal static class MacHid
 
         try
         {
-            return Describe(service);
+            return DataProperty(service, "ReportDescriptor");
         }
         finally
         {
@@ -117,9 +115,11 @@ internal static class MacHid
         }
 
         nint device;
+        byte[]? descriptor;
         try
         {
             device = IOHIDDeviceCreate(0, service);
+            descriptor = DataProperty(service, "ReportDescriptor");
         }
         finally
         {
@@ -138,7 +138,7 @@ internal static class MacHid
             throw new IOException($"Unable to open HID device {path} (IOReturn 0x{result:X8}).");
         }
 
-        return new MacHidDevice(device);
+        return new MacHidDevice(device, descriptor);
     }
 
     private static uint MatchingService(string path) =>
@@ -146,13 +146,15 @@ internal static class MacHid
             ? IOServiceGetMatchingService(MainPort, IORegistryEntryIDMatching(entryId))
             : 0;
 
-    private static MacHidEntry? Describe(uint service)
+    private static MacHidEntry? Describe(uint service, int? wantedVendorId, int? wantedProductId)
     {
         // HidSharp skipped devices without a USB id too (the built-in Apple ones).
         if (
             IORegistryEntryGetRegistryEntryID(service, out var entryId) != 0
             || NumberProperty(service, "VendorID") is not { } vendorId
             || NumberProperty(service, "ProductID") is not { } productId
+            || (wantedVendorId is not null && vendorId != wantedVendorId)
+            || (wantedProductId is not null && productId != wantedProductId)
         )
         {
             return null;
@@ -183,19 +185,14 @@ internal static class MacHid
         }
     }
 
-    // The interface number lives on the USB interface node above the HID device.
+    // The interface number lives on the USB interface node above the HID device. Only the direct parent: further
+    // up sits e.g. the USB interface of a Bluetooth controller.
     private static nint SearchParents(uint service, string key)
     {
         var name = CreateString(key);
         try
         {
-            return IORegistryEntrySearchCFProperty(
-                service,
-                CString("IOService"),
-                name,
-                0,
-                IterateRecursively | IterateParents
-            );
+            return IORegistryEntrySearchCFProperty(service, CString("IOService"), name, 0, IterateParents);
         }
         finally
         {
@@ -390,6 +387,8 @@ internal sealed class MacHidDevice : IDisposable
     // Static so the delegate outlives every registration. A private mode keeps the run loop to this device.
     private static readonly InputReportCallback OnInputReport = HandleInputReport;
     private static readonly nint RunLoopMode = MacHid.CreateString("DeviceBatteryInfo.HidInputReports");
+    private const int RunLoopFinished = 1;
+    private const int RunLoopStopped = 2;
 
     private readonly nint _device;
     private readonly Queue<byte[]> _inputReports = new();
@@ -398,7 +397,13 @@ internal sealed class MacHidDevice : IDisposable
     private nint _runLoop;
     private bool _prependReportId;
 
-    internal MacHidDevice(nint device) => _device = device;
+    internal MacHidDevice(nint device, byte[]? reportDescriptor)
+    {
+        _device = device;
+        ReportDescriptor = reportDescriptor;
+    }
+
+    public byte[]? ReportDescriptor { get; }
 
     // Like hidapi, an unnumbered report (id 0) goes out without its id byte.
     public void SetReport(MacHidReportType type, byte[] report)
@@ -447,7 +452,11 @@ internal sealed class MacHidDevice : IDisposable
     {
         if (_inputReports.Count == 0)
         {
-            _ = CFRunLoopRunInMode(RunLoopMode, timeout.TotalSeconds, returnAfterSourceHandled: true);
+            var result = CFRunLoopRunInMode(RunLoopMode, timeout.TotalSeconds, returnAfterSourceHandled: true);
+            if (result is RunLoopFinished or RunLoopStopped)
+            {
+                throw new IOException($"The HID input report run loop ended (CFRunLoopRunResult {result}).");
+            }
         }
 
         return _inputReports.TryDequeue(out var report) ? report : null;
@@ -467,6 +476,10 @@ internal sealed class MacHidDevice : IDisposable
         if (_self.IsAllocated)
         {
             _self.Free();
+        }
+
+        if (_inputBuffer != 0)
+        {
             Marshal.FreeHGlobal(_inputBuffer);
         }
     }

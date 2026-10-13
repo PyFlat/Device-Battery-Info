@@ -64,8 +64,12 @@ internal interface IHidTransport
     );
 
     // Reads one feature report without writing anything first (unlike ExchangeAsync).
-    Task<byte[]> GetFeatureAsync(string devicePath, byte reportId, CancellationToken cancellationToken) =>
-        throw new NotSupportedException();
+    Task<byte[]> GetFeatureAsync(
+        string devicePath,
+        byte reportId,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    ) => throw new NotSupportedException();
 }
 
 internal sealed partial class HidSharpTransport : IHidTransport
@@ -135,10 +139,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
 
     private static IEnumerable<HidCandidate> ListDevices(int? vendorId, int? productId, bool withUsage) =>
         OperatingSystem.IsMacOS()
-            ? MacHid
-                .Enumerate()
-                .Where(e => (vendorId is null || e.VendorId == vendorId) && (productId is null || e.ProductId == productId))
-                .Select(Describe)
+            ? MacHid.Enumerate(vendorId, productId).Select(Describe)
             : DeviceList.Local.GetHidDevices(vendorId, productId).Select(d => Describe(d, withUsage));
 
     private static HidDevice? FindHidSharpDevice(string devicePath) =>
@@ -147,9 +148,13 @@ internal sealed partial class HidSharpTransport : IHidTransport
             .FirstOrDefault(d => string.Equals(d.DevicePath, devicePath, StringComparison.OrdinalIgnoreCase));
 
     private static int? FeatureReportLength(string devicePath) =>
-        OperatingSystem.IsMacOS()
-            ? MacHid.Find(devicePath) is { } entry ? Describe(entry).FeatureReportLength : null
-            : FindHidSharpDevice(devicePath)?.GetMaxFeatureReportLength();
+        (
+            OperatingSystem.IsMacOS()
+                ? ParseDescriptor(MacHid.ReportDescriptor(devicePath))?.MaxFeatureReportLength
+                : FindHidSharpDevice(devicePath)?.GetMaxFeatureReportLength()
+        ) is > 0 and var length
+            ? length
+            : null;
 
     public Task<byte[]> ExchangeAsync(
         string devicePath,
@@ -258,8 +263,17 @@ internal sealed partial class HidSharpTransport : IHidTransport
     public Task<byte[]> GetFeatureAsync(
         string devicePath,
         byte reportId,
+        TimeSpan budget,
         CancellationToken cancellationToken
-    )
+    ) =>
+        BoundAsync(
+            $"HID feature-report read on {devicePath}",
+            budget,
+            ct => Task.FromResult(ReadFeature(devicePath, reportId, ct)),
+            cancellationToken
+        );
+
+    private byte[] ReadFeature(string devicePath, byte reportId, CancellationToken cancellationToken)
     {
         var reportLength =
             FeatureReportLength(devicePath)
@@ -270,7 +284,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
         report[0] = reportId;
         using var channel = _openFeatureChannel(devicePath);
         channel.Get(report);
-        return Task.FromResult(report);
+        return report;
     }
 
     private static TimeSpan SettleDelay(int attempt) =>
@@ -359,10 +373,8 @@ internal sealed partial class HidSharpTransport : IHidTransport
     {
         if (OperatingSystem.IsMacOS())
         {
-            var entry =
-                MacHid.Find(devicePath)
-                ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
-            return new MacReportStream(MacHid.Open(devicePath), ParseDescriptor(entry.ReportDescriptor));
+            var macDevice = MacHid.Open(devicePath);
+            return new MacReportStream(macDevice, ParseDescriptor(macDevice.ReportDescriptor));
         }
 
         var device =
@@ -588,8 +600,16 @@ internal sealed class MacReportStream : IReportStream
     {
         _device = device;
         _descriptor = descriptor;
-        var usesReportIds = descriptor?.Reports.Any(r => r.ReportID != 0) ?? true;
-        device.ListenForInputReports(Math.Max(descriptor?.MaxInputReportLength ?? 0, 64), !usesReportIds);
+        try
+        {
+            var usesReportIds = descriptor?.Reports.Any(r => r.ReportID != 0) ?? true;
+            device.ListenForInputReports(Math.Max(descriptor?.MaxInputReportLength ?? 0, 64), !usesReportIds);
+        }
+        catch
+        {
+            device.Dispose();
+            throw;
+        }
     }
 
     public int OutputReportLength(byte reportId) =>

@@ -488,7 +488,7 @@ Design knowledge that is not obvious from the code alone:
   named per chip. So `MacHid` enumerates `IOHIDDevice` services itself, a candidate's `Path` is
   `IORegistryEntryID:<hex id>` (`MacHid.PathOf`), and a device is opened through `IORegistryEntryIDMatching`
   plus `IOHIDDeviceCreate`/`IOHIDDeviceOpen`. Never derive anything from a macOS path: the interface number
-  is the `bInterfaceNumber` of the USB interface node above the device, `PhysicalUnitKey` uses the
+  is the `bInterfaceNumber` of the USB interface node directly above the device, `PhysicalUnitKey` uses the
   `LocationID` (`HidCandidate.LocationId`), and the report lengths and collections come from the
   `ReportDescriptor` property parsed by HidSharp's `ReportDescriptor` (its lengths include the report id, as
   HidSharp reported them). Feature reports use `IOHIDDeviceSetReport`/`GetReport` (`MacFeatureChannel`)
@@ -497,7 +497,7 @@ Design knowledge that is not obvious from the code alone:
   that registered it, scheduled in a private run-loop mode, so `MacReportStream` opens, writes and reads on
   one thread inside the bounded `Task.Run`; an unnumbered input report gets a leading 0, like on Windows.
   Windows and Linux still go through HidSharp (`HidSharpReportStream`). A refused HidSharp `Open` blocks
-  for about a second and an IOKit call can stall too, so off Windows the whole exchange (`ExchangeAsync` and `ExchangeReportsAsync`) runs in `Task.Run`
+  for about a second and an IOKit call can stall too, so off Windows the whole exchange (`ExchangeAsync`, `ExchangeReportsAsync` and `GetFeatureAsync`) runs in `Task.Run`
   bounded by its budget. Budget expiry must be an `InvalidOperationException`, never an
   `OperationCanceledException`: `HidFamily`, `DeviceFamilyProvider` and
   `BatteryPollingService.DiscoverAsync` let a cancellation escape, which aborts the poll for every
