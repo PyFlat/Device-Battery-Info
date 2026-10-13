@@ -32,6 +32,7 @@ internal static class MacHid
 
     private const string PathPrefix = "IORegistryEntryID:";
     private const uint MainPort = 0;
+    private const uint IterateRecursively = 1;
     private const uint IterateParents = 2;
     private const nint NumberSInt64Type = 4;
     internal const uint Utf8Encoding = 0x08000100;
@@ -185,14 +186,19 @@ internal static class MacHid
         }
     }
 
-    // The interface number lives on the USB interface node above the HID device. Only the direct parent: further
-    // up sits e.g. the USB interface of a Bluetooth controller.
+    // The interface number lives on the USB interface node above the HID device.
     private static nint SearchParents(uint service, string key)
     {
         var name = CreateString(key);
         try
         {
-            return IORegistryEntrySearchCFProperty(service, CString("IOService"), name, 0, IterateParents);
+            return IORegistryEntrySearchCFProperty(
+                service,
+                CString("IOService"),
+                name,
+                0,
+                IterateRecursively | IterateParents
+            );
         }
         finally
         {

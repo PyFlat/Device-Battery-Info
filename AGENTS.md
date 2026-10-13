@@ -488,7 +488,7 @@ Design knowledge that is not obvious from the code alone:
   named per chip. So `MacHid` enumerates `IOHIDDevice` services itself, a candidate's `Path` is
   `IORegistryEntryID:<hex id>` (`MacHid.PathOf`), and a device is opened through `IORegistryEntryIDMatching`
   plus `IOHIDDeviceCreate`/`IOHIDDeviceOpen`. Never derive anything from a macOS path: the interface number
-  is the `bInterfaceNumber` of the USB interface node directly above the device, `PhysicalUnitKey` uses the
+  is the `bInterfaceNumber` of the USB interface node above the device, `PhysicalUnitKey` uses the
   `LocationID` (`HidCandidate.LocationId`), and the report lengths and collections come from the
   `ReportDescriptor` property parsed by HidSharp's `ReportDescriptor` (its lengths include the report id, as
   HidSharp reported them). Feature reports use `IOHIDDeviceSetReport`/`GetReport` (`MacFeatureChannel`)
