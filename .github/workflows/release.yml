@@ -7,15 +7,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release, e.g. v1.0.19 (must already exist and point at the commit to ship)"
+        description: "Tag to release, e.g. v1.0.19 (must already exist; run the workflow from that tag)"
         required: true
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: windows-latest
+  prepare:
+    runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       changelog: ${{ steps.notes.outputs.changelog }}
@@ -23,7 +23,6 @@ jobs:
     steps:
       - name: Determine tag and version
         id: tag
-        shell: bash
         run: |
           tag="${{ github.event.inputs.tag }}"
           if [ -z "$tag" ]; then
@@ -36,13 +35,16 @@ jobs:
         with:
           ref: ${{ steps.tag.outputs.tag }}
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
+      # publish-plugin.yml builds github.sha, not the tag input
+      - name: Verify the run is for the tagged commit
+        run: |
+          tagCommit=$(git rev-parse HEAD)
+          if [ "$tagCommit" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag ${{ steps.tag.outputs.tag }} points at $tagCommit, but this run is for $GITHUB_SHA. Run the workflow from the tag."
+            exit 1
+          fi
 
       - name: Verify manifest.json version matches the tag
-        shell: bash
         run: |
           manifestVersion=$(jq -r .version src/DeviceBatteryInfo/manifest.json)
           if [ "$manifestVersion" != "${{ steps.tag.outputs.version }}" ]; then
@@ -50,49 +52,48 @@ jobs:
             exit 1
           fi
 
-      - name: Restore
-        run: dotnet restore DeviceBatteryInfo.slnx
-
-      - name: Test
-        run: dotnet test DeviceBatteryInfo.slnx --configuration Release --filter "Category!=Hardware"
-
-      - name: Install macrodeck-plugin CLI
-        run: dotnet tool install --global MacroDeck.Plugin.Cli --prerelease
-
-      - name: Build the plugin artifact
-        run: macrodeck-plugin build --source src/DeviceBatteryInfo --output ./artifacts
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          gh release create "${{ steps.tag.outputs.tag }}" ./artifacts/*.macroDeckPlugin \
-            --title "${{ steps.tag.outputs.tag }}" \
-            --generate-notes
-
-      - name: Read generated release notes
+      - name: Generate release notes
         id: notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
           {
             echo "changelog<<EOF_CHANGELOG_$GITHUB_RUN_ID"
-            gh release view "${{ steps.tag.outputs.tag }}" --json body -q .body
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="${{ steps.tag.outputs.tag }}" -q .body
             echo "EOF_CHANGELOG_$GITHUB_RUN_ID"
           } >> "$GITHUB_OUTPUT"
 
   publish:
-    needs: release
+    needs: prepare
     uses: Macro-Deck-App/GitHub-Actions/.github/workflows/publish-plugin.yml@v1
     permissions:
       contents: read
       id-token: write
     with:
-      version: ${{ needs.release.outputs.tag }}
+      version: ${{ needs.prepare.outputs.tag }}
       source: src/DeviceBatteryInfo
       cli-version: 3.0.0-beta.16
-      changelog: ${{ needs.release.outputs.changelog }}
-      # The release job above already ran the tests on windows-latest
-      run-tests: false
+      changelog: ${{ needs.prepare.outputs.changelog }}
+      upload-artifact: true
+      artifact-name: plugin-package
+
+  release:
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-package
+          path: artifacts
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          CHANGELOG: ${{ needs.prepare.outputs.changelog }}
+        run: |
+          printf '%s\n' "$CHANGELOG" > notes.md
+          gh release create "${{ needs.prepare.outputs.tag }}" artifacts/*.macroDeckPlugin \
+            --title "${{ needs.prepare.outputs.tag }}" \
+            --notes-file notes.md
