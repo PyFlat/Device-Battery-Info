@@ -28,7 +28,7 @@ internal sealed class MchoseProtocol()
 
     private const byte HeadsetOff = 0x1A;
 
-    private static readonly byte[] BatteryRequest = [ReportId, BatteryCommand, Query];
+    internal static readonly byte[] BatteryRequest = [ReportId, BatteryCommand, Query];
 
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
         [new("V9 Pro", 0x385D) { Kind = BatterySourceKind.Headset }];

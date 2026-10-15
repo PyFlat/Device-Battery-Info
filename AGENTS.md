@@ -515,9 +515,11 @@ Design knowledge that is not obvious from the code alone:
 - **The MCHOSE V9 Pro is mapped from the owner's USB captures, not yet read through the plugin.**
   `Sources/Mchose/MchoseProtocol.cs` (dongle `291D:385D`, `FF90:0001`, 64-byte reports) writes `55 65 01`,
   which is what the MCHOSE app sends, and the dongle answers `55 65` with the level in byte 2 and the state
-  in byte 3 within about 25 ms. The level moves in 10% steps. State `0x02` is on battery, `0x03` charging
-  (the level freezes at its value from when the cable went in, so charging reads with no percent, as on
-  Rapoo and AULA), and `0x1A` is the headset switched off (level 0, then the dongle goes silent), which
+  in byte 3 within about 25 ms. The level moves in 10% steps. State `0x02` is on battery, read through the
+  plugin. `0x03` is charging in the frames the dongle pushes (the level freezes at its value from when the
+  cable went in, so charging reads with no percent, as on Rapoo and AULA), but the reply to the query
+  while charging was level 90, state `0x00`, which is not mapped yet. A switched-off headset leaves the
+  query unanswered, so the read times out; the dongle pushes `00 1A` once when it goes off, which also
   throws instead of publishing 0%. On battery the dongle pushes only on changes, so the read must ask.
   It also pushes `55 11 02` when the headset connects, which the reply match rejects.
 - **HID on macOS goes through IOKit directly (`Sources/Hid/MacHid.cs`), not through HidSharp.** HidSharp
