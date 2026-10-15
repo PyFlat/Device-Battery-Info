@@ -182,7 +182,7 @@ public sealed class HardwareTests
                 try
                 {
                     var reading = MchoseProtocol.ParseBattery(report);
-                    parsed = $"{reading.Percent?.ToString() ?? "-"}% {reading.Status}";
+                    parsed = $"{reading.Percent?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-"}% {reading.Status}";
                 }
                 catch (InvalidOperationException exception)
                 {
@@ -191,7 +191,7 @@ public sealed class HardwareTests
 
                 HardwareReport.Line(
                     subject,
-                    $"{string.Join(" ", report.Take(16).Select(b => b.ToString("X2")))} = {parsed}"
+                    $"{string.Join(" ", report.Take(16).Select(b => b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)))} = {parsed}"
                 );
             }
             catch (Exception exception) when (exception is not OutOfMemoryException)
