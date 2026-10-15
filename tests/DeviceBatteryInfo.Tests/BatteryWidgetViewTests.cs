@@ -2,6 +2,7 @@ using System.Text.Json;
 using DeviceBatteryInfo.Actions;
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Ui;
+using MacroDeck.Ui.Config.Options;
 using MacroDeck.Ui.Model.Events;
 using MacroDeck.Ui.Model.Surfaces;
 using MacroDeck.Ui.Previews;
@@ -113,10 +114,7 @@ public sealed class BatteryWidgetViewTests
     [TestCase(BatteryWidgetTypes.TileId)]
     public void Config_view_builds(string widgetId)
     {
-        var devices = new[]
-        {
-            new BatterySlot("system", "This PC", BatterySourceKind.System, DeviceType.System),
-        };
+        UiOption[] devices = [UiOption.Of("system") with { Label = "This PC" }];
 
         Assert.DoesNotThrow(
             () =>

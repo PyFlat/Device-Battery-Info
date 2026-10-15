@@ -14,7 +14,7 @@ internal static class BatteryWidgetConfigView
     public static UiElement Build(
         string widgetLocalId,
         BatteryWidgetOptions current,
-        IReadOnlyList<BatterySlot> devices,
+        IReadOnlyList<UiOption> devices,
         JsonElement data = default
     )
     {
@@ -80,9 +80,7 @@ internal static class BatteryWidgetConfigView
             {
                 Key = "sourceIds",
                 Label = Strings.Widgets.Config.Devices.Label(),
-                Options = UiValue.Of<IReadOnlyList<UiOption>>(
-                    devices.Select(d => UiOption.Of(d.Id) with { Label = d.DisplayName }).ToArray()
-                ),
+                Options = UiValue.Of(devices),
                 Binding = Bind.To(sourceIds),
                 Reorderable = UiValue.Of(true),
             }

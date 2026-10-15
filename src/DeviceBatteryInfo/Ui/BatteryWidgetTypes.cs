@@ -71,7 +71,7 @@ internal static class BatteryWidgetTypes
             "sourceIds": {
               "type": "array",
               "items": { "type": "string" },
-              "description": "Battery source ids to show, in display order. Empty means every device the plugin sees."
+              "description": "Devices to show, in display order: this plugin's device ids or Macro Deck battery catalog ids (provider:id) of other plugins' devices. Empty means every device this plugin reads."
             },
             "showBar": { "type": "boolean", "default": true },
             "showPercent": { "type": "boolean", "default": true },

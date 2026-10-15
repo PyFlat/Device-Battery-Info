@@ -1,9 +1,12 @@
 using System.Text.Json;
 using DeviceBatteryInfo.Core;
+using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Ui;
+using MacroDeck.Sdk.Batteries;
 using MacroDeck.Sdk.Ui;
 using MacroDeck.Sdk.Widgets;
 using MacroDeck.Ui.Config;
+using MacroDeck.Ui.Config.Options;
 using MacroDeck.Ui.Model.Surfaces;
 using MacroDeck.Ui.Runtime;
 
@@ -120,6 +123,7 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         void OnCatalogChanged(object? sender, EventArgs e) => Refresh();
         _registry.Changed += OnRegistryChanged;
         _catalog.Changed += OnCatalogChanged;
+        BatteryCatalogChanged += OnCatalogChanged;
 
         _polling.RequestRefresh();
 
@@ -129,6 +133,7 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             {
                 _registry.Changed -= OnRegistryChanged;
                 _catalog.Changed -= OnCatalogChanged;
+                BatteryCatalogChanged -= OnCatalogChanged;
             }
         );
     }
@@ -153,59 +158,96 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         var options = ParseOptions(data);
         var view = new UiView(
             surface,
-            BatteryWidgetConfigView.Build(localId, options, CurrentSlots(), data ?? default)
+            BatteryWidgetConfigView.Build(localId, options, DeviceChoices(), data ?? default)
         );
         return new UiViewSession(view);
     }
 
-    private BatteryWidgetModel BuildModel(BatteryWidgetOptions options)
+    internal BatteryWidgetModel BuildModel(BatteryWidgetOptions options)
     {
-        var rows = ResolveDevices(options.SourceIds)
-            .Select(slot =>
-            {
-                if (_registry.TryGet(slot.Id, out var snapshot))
-                {
-                    var reading = snapshot.Reading;
-                    return new BatteryWidgetRow(
-                        slot.Id,
-                        slot.DisplayName,
-                        reading.Percent,
-                        reading.Status,
-                        reading.IsCharging,
-                        snapshot.IsStale,
-                        FormatTimeToFull(reading.TimeToFull),
-                        BatteryTrendFormatter.FormatText(_trend.GetTrend(snapshot)),
-                        slot.Kind
-                    );
-                }
-
-                return new BatteryWidgetRow(
-                    slot.Id,
-                    slot.DisplayName,
-                    null,
-                    BatteryStatus.Unknown,
-                    false,
-                    true,
-                    null,
-                    Kind: slot.Kind
-                );
-            })
-            .ToArray();
+        var own = CurrentSlots();
+        IReadOnlyList<BatteryWidgetRow> rows;
+        if (options.SourceIds.Count == 0)
+        {
+            rows = own.Select(OwnRow).ToArray();
+        }
+        else
+        {
+            var ownById = own.ToDictionary(slot => slot.Id, StringComparer.Ordinal);
+            var external = ExternalDevices().ToDictionary(d => d.Id, StringComparer.Ordinal);
+            rows = options
+                .SourceIds.Select(id =>
+                    ownById.TryGetValue(id, out var slot) ? OwnRow(slot)
+                    : external.TryGetValue(id, out var device) ? ExternalRow(device)
+                    : null
+                )
+                .OfType<BatteryWidgetRow>()
+                .ToArray();
+        }
 
         return new BatteryWidgetModel(options.Order(rows), options);
     }
 
-    private IReadOnlyList<BatterySlot> ResolveDevices(IReadOnlyList<string> sourceIds)
+    private BatteryWidgetRow OwnRow(BatterySlot slot)
     {
-        var all = CurrentSlots();
-        if (sourceIds.Count == 0)
+        if (_registry.TryGet(slot.Id, out var snapshot))
         {
-            return all;
+            var reading = snapshot.Reading;
+            return new BatteryWidgetRow(
+                slot.Id,
+                slot.DisplayName,
+                reading.Percent,
+                reading.Status,
+                reading.IsCharging,
+                snapshot.IsStale,
+                FormatTimeToFull(reading.TimeToFull),
+                BatteryTrendFormatter.FormatText(_trend.GetTrend(snapshot)),
+                slot.Kind
+            );
         }
 
-        var byId = all.ToDictionary(slot => slot.Id, StringComparer.Ordinal);
-        return sourceIds.Where(byId.ContainsKey).Select(id => byId[id]).ToArray();
+        return new BatteryWidgetRow(
+            slot.Id,
+            slot.DisplayName,
+            null,
+            BatteryStatus.Unknown,
+            false,
+            true,
+            null,
+            Kind: slot.Kind
+        );
     }
+
+    private static BatteryWidgetRow ExternalRow(BatteryDeviceSnapshot device)
+    {
+        var status = ExternalBatteryDevices.StatusOf(device.ChargeState, device.LevelPercent);
+        return new BatteryWidgetRow(
+            ExternalBatteryDevices.RowKey(device.Id),
+            device.Name,
+            device.LevelPercent,
+            status,
+            status is BatteryStatus.Charging,
+            !device.IsConnected,
+            FormatTimeToFull(device.TimeToFull),
+            Kind: ExternalBatteryDevices.KindOf(device.Kind)
+        );
+    }
+
+    internal UiOption[] DeviceChoices() =>
+        [
+            .. CurrentSlots()
+                .Select(slot => UiOption.Of(slot.Id) with { Label = slot.DisplayName }),
+            .. ExternalDevices()
+                .Select(device =>
+                    UiOption.Of(device.Id) with
+                    {
+                        Label = Strings.Widgets.Config.Devices.External(
+                            device.Name,
+                            device.ProviderName
+                        ),
+                    }
+                ),
+        ];
 
     private string? LocalWidgetId(string widgetTypeAttribute)
     {
