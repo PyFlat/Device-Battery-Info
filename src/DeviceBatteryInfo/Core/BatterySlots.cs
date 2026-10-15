@@ -10,7 +10,8 @@ public sealed record BatterySlot(
     DeviceType Type,
     string? BluetoothFriendlyName = null,
     string? AdbAddress = null,
-    string? CatalogDeviceId = null
+    string? CatalogDeviceId = null,
+    Guid? EntryId = null
 );
 
 public static class BatterySlots

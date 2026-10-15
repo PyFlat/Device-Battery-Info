@@ -43,6 +43,12 @@ minutes of history and starts over whenever the plugin restarts.
 
 **A "Refresh battery levels" action** that forces an immediate poll.
 
+**Macro Deck's own Battery widget** (Macro Deck 3.0.0-beta.17 and later) lists every device you add
+here too, and Macro Deck creates its own battery variables for each of them. Those sit beside this
+plugin's variables, which stay unchanged. A device you are not reaching right now stays listed with its
+last level and shows as disconnected; deleting the device removes it. Macro Deck lets every installed
+plugin read these devices (name, kind and level).
+
 ## Supported devices
 
 ### Generic sources
@@ -205,6 +211,8 @@ src/DeviceBatteryInfo/
   BatteryIntegration.cs    IPluginIntegration + IEventProvider + IConfigFlowProvider
   BatteryIntegration.Widgets.cs   the same partial class: IWidgetTypeProvider + IUiProvider
   BatteryIntegration.Issues.cs    the same partial class: IIntegrationIssueProvider (Linux HID access)
+  BatteryIntegration.Batteries.cs the same partial class: IBatteryProvider (Macro Deck's battery catalog)
+  HostBatteries/           configured devices -> Macro Deck's battery catalog, published after each poll
   ConfigFlow/              the device config flow (add/edit steps, discovery, the "Other devices" catalog)
   Core/                    IBatterySource, BatteryReading, BatteryRegistry, BatteryPollingService,
                            BatteryPluginOptions, DeviceCatalog, DeviceAccessProblems

@@ -20,6 +20,9 @@ public sealed class BatteryPollingService(
     private readonly SemaphoreSlim _wake = new(0, 1);
     private readonly Dictionary<string, bool> _lastFailed = new(StringComparer.Ordinal);
 
+    // Raised once after every poll cycle, so a listener can batch everything the cycle changed.
+    public event EventHandler? Polled;
+
     public void RequestRefresh()
     {
         try
@@ -48,6 +51,8 @@ public sealed class BatteryPollingService(
             {
                 _logger.Error(exception, "Battery poll cycle failed.");
             }
+
+            Polled?.Invoke(this, EventArgs.Empty);
 
             var interval = TimeSpan.FromSeconds(
                 Math.Max(10, _options.CurrentValue.PollIntervalSeconds)
