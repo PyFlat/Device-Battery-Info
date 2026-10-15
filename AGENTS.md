@@ -453,7 +453,11 @@ Design knowledge that is not obvious from the code alone:
   `0x08`, `0x88`, `0x00`, `0x1E`, `0x9F` and `0x80` were all measured against a wired Basilisk V3 Pro and
   every one of them answered `0x04` on the idle dongle and succeeded on the cable. `FindCandidates` orders by interface ascending; `HidFamily` probes
   each once with the shorter `HidChannel.ProbeBudget` (for both report kinds), so a silent interface
-  cannot stall the poll, and caches the answering path. A wireless mouse has a dongle product id and a cable product id, so a
+  cannot stall the poll, and caches the answering path. When nothing answers the probe, it keeps the first
+  candidate that failed for another reason than `NotSupportedException`, which a protocol throws when the
+  device answered but is a different one: two Logitech receivers share `C547`, one with a G502 X PLUS
+  (`0x1004`) and one with a G915 (`0x1001` only), and a mouse probe over the receiver can outlast the
+  400 ms, so falling back to the first candidate bound the mouse to the keyboard. A wireless mouse has a dongle product id and a cable product id, so a
   `HidDeviceInfo` lists both (`FindCandidates` runs once per id) and `HidChannel.ProductId` says which is
   in use. When a read fails `HidFamily` forgets the remembered interface, so the next poll probes again
   and picks up a dongle-to-cable switch; without that, an unplugged-from-radio mouse whose dongle is

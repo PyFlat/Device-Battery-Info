@@ -51,6 +51,12 @@ public sealed class HidFamilyTests
                 throw new InvalidOperationException("HidD_GetFeature failed.");
             }
 
+            // mi_01 answers, but as a different device than the protocol is looking for.
+            if (devicePath.Contains("mi_01", StringComparison.Ordinal))
+            {
+                throw new NotSupportedException("The device does not have that battery feature.");
+            }
+
             // A minimal completed frame with the value 180 at the response index.
             var response = new byte[11];
             response[10] = 180;
@@ -114,6 +120,17 @@ public sealed class HidFamilyTests
             );
             Assert.That(transport.Queried, Does.Contain(Candidate(2).Path));
         }
+    }
+
+    [Test]
+    public async Task A_different_device_is_never_the_fallback_when_nothing_answers()
+    {
+        var transport = new FakeTransport(Candidate(1), Candidate(0));
+        var sources = await DiscoverAsync(transport, MouseSlot("mouse", "Mouse"));
+        transport.Queried.Clear();
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await sources[0].ReadAsync(CancellationToken.None));
+        Assert.That(transport.Queried, Is.EqualTo(new[] { Candidate(0).Path }));
     }
 
     [Test]

@@ -189,6 +189,7 @@ internal sealed class HidFamily(
             return known;
         }
 
+        HidCandidate? fallback = null;
         foreach (var candidate in candidates)
         {
             try
@@ -211,13 +212,19 @@ internal sealed class HidFamily(
                 );
                 return candidate;
             }
+            // A different device behind the same product id (two Logitech receivers) is never the fallback.
+            catch (NotSupportedException exception)
+            {
+                _logger.Debug(exception, "HID candidate {Path} is a different device.", candidate.Path);
+            }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 _logger.Debug(exception, "HID candidate {Path} did not answer.", candidate.Path);
+                fallback ??= candidate;
             }
         }
 
-        // Nothing answered; keep the first path so the device shows as stale instead of disappearing.
-        return candidates[0];
+        // Nothing answered; keep a path so the device shows as stale instead of disappearing.
+        return fallback ?? candidates[0];
     }
 }

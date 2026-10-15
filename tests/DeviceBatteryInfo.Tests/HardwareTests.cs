@@ -123,7 +123,15 @@ public sealed class HardwareTests
     [Test]
     public async Task Reads_every_supported_hid_device_through_the_plugin()
     {
-        var (family, sources) = await DiscoverAsync(Protocols);
+        var probes = new ProbeLog();
+        var (family, sources) = await DiscoverAsync(
+            Protocols,
+            new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(probes).CreateLogger()
+        );
+        foreach (var line in probes.Lines)
+        {
+            HardwareReport.Line("probe", line);
+        }
 
         var read = 0;
         foreach (var model in family.Models)
@@ -387,6 +395,19 @@ public sealed class HardwareTests
                 Thread.Sleep(20);
             }
         }
+    }
+
+    private sealed class ProbeLog : Serilog.Core.ILogEventSink
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _lines = new();
+
+        public IEnumerable<string> Lines => _lines;
+
+        public void Emit(Serilog.Events.LogEvent logEvent) =>
+            _lines.Enqueue(
+                logEvent.RenderMessage()
+                    + (logEvent.Exception is { } exception ? $" ({exception.Message})" : "")
+            );
     }
 
     private sealed class RetryCounter : Serilog.Core.ILogEventSink
