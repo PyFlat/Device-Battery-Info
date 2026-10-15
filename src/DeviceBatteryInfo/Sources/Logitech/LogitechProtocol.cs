@@ -15,7 +15,10 @@ internal sealed class LogitechProtocol() : LogitechHidppProtocol(0xFF00, 0x0002,
     protected override byte BatteryFunction => 0x01;
 
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
-        [new("G Pro X Superlight 2", 0xC54D, 0xC09B)];
+        [
+            new("G Pro X Superlight 2", 0xC54D, 0xC09B),
+            new("G502 X PLUS", 0xC547, 0xC095),
+        ];
 
     protected override BatteryReading ParseBattery(ReadOnlySpan<byte> report) => ParseStatus(report);
 

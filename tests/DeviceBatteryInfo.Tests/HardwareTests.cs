@@ -201,6 +201,103 @@ public sealed class HardwareTests
         }
     }
 
+    // Shows which battery feature (0x1000, 0x1001, 0x1004) a Logitech device has before it gets a protocol.
+    [Test]
+    public async Task Lists_the_hidpp_features_of_every_logitech_device()
+    {
+        var transport = new HidSharpTransport(Serilog.Core.Logger.None);
+        const int vendorId = 0x046D;
+        IEnumerable<HidCandidate> interfaces = OperatingSystem.IsMacOS()
+            ? MacHid.Enumerate(vendorId).Select(HidSharpTransport.Describe)
+            : DeviceList.Local.GetHidDevices(vendorId).Select(d => HidSharpTransport.Describe(d, withUsage: true));
+        var candidates = interfaces
+            .Select(c => c.ProductId)
+            .Distinct()
+            .Order()
+            .SelectMany(productId => transport.FindCandidates(vendorId, productId, interfaceNumber: null, 0))
+            .Where(c => !c.CouldNotOpen && c.OutputReportLength >= 20 && c.HasUsage(0xFF00, 0x0002))
+            .ToArray();
+        Assume.That(candidates, Is.Not.Empty, "No Logitech HID++ interface present.");
+
+        foreach (var candidate in candidates)
+        {
+            var subject = $"{candidate.ProductName} ({candidate.ProductId:X4}) interface {candidate.InterfaceNumber}";
+            var channel = new HidChannel(transport, candidate.Path, candidate.ProductId, HidReportKind.InputOutput);
+            foreach (var deviceIndex in new byte[] { 0x01, 0xFF })
+            {
+                try
+                {
+                    HardwareReport.Line(
+                        $"{subject} index {deviceIndex:X2}",
+                        await DescribeHidppDeviceAsync(channel, deviceIndex)
+                    );
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException)
+                {
+                    HardwareReport.Line($"{subject} index {deviceIndex:X2}", "no answer: " + exception.Message);
+                }
+            }
+        }
+    }
+
+    private static async Task<string> DescribeHidppDeviceAsync(HidChannel channel, byte deviceIndex)
+    {
+        var featureSet = await FeatureIndexAsync(channel, deviceIndex, 0x0001);
+        var count = (await CallHidppAsync(channel, deviceIndex, featureSet, 0x00))[4];
+        var features = new List<string>();
+        for (var i = 1; i <= count; i++)
+        {
+            var reply = await CallHidppAsync(channel, deviceIndex, featureSet, 0x01, (byte)i);
+            features.Add($"{reply[4] << 8 | reply[5]:X4}");
+        }
+
+        string name;
+        try
+        {
+            var nameFeature = await FeatureIndexAsync(channel, deviceIndex, 0x0005);
+            var length = (await CallHidppAsync(channel, deviceIndex, nameFeature, 0x00))[4];
+            var text = new System.Text.StringBuilder();
+            while (text.Length < length)
+            {
+                var reply = await CallHidppAsync(channel, deviceIndex, nameFeature, 0x01, (byte)text.Length);
+                var chunk = reply.AsSpan(4, Math.Min(length - text.Length, reply.Length - 4));
+                text.Append(System.Text.Encoding.ASCII.GetString(chunk));
+            }
+
+            name = text.ToString();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            name = "(no name)";
+        }
+
+        return $"{name}: features {string.Join(" ", features)}";
+    }
+
+    private static async Task<byte> FeatureIndexAsync(HidChannel channel, byte deviceIndex, ushort featureId) =>
+        LogitechHidppProtocol.ParseFeatureIndex(
+            await CallHidppAsync(channel, deviceIndex, 0x00, 0x00, (byte)(featureId >> 8), (byte)featureId)
+        );
+
+    private static async Task<byte[]> CallHidppAsync(
+        HidChannel channel,
+        byte deviceIndex,
+        byte featureIndex,
+        byte functionId,
+        params byte[] parameters
+    )
+    {
+        var function = LogitechHidppProtocol.Function(functionId);
+        var reply = await channel.ExchangeAsync(
+            [0x11, deviceIndex, featureIndex, function, .. parameters],
+            r => LogitechHidppProtocol.IsReplyTo(r, deviceIndex, featureIndex, function),
+            CancellationToken.None
+        );
+        return reply[2] == 0xFF
+            ? throw new InvalidOperationException($"HID++ error 0x{reply[5]:X2}.")
+            : reply;
+    }
+
     // Stands in for Razer Synapse polling the same control interface.
     [Test]
     public async Task Reads_while_a_foreign_poller_hammers_the_same_interface()

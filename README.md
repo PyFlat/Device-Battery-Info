@@ -104,6 +104,7 @@ listed here is not supported even if it shares a brand or protocol with one that
 | Razer    | Viper V2 Pro         | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
 | Razer    | Viper V3 Pro SE      | Mouse      | Dongle or cable   | yes       | yes      |                                                                                                  |
 | Logitech | G Pro X Superlight 2 | Mouse      | Receiver or cable | yes       | yes      |                                                                                                  |
+| Logitech | G502 X PLUS          | Mouse      | Receiver or cable | yes       | yes      |                                                                                                  |
 | Logitech | G Pro X Wireless     | Headset    | Dongle            | approx.   | yes      | Reports a voltage, so the percentage is an estimate. It reads nothing while the headset is off.  |
 | Corsair  | VOID PRO Wireless    | Headset    | Dongle            | yes       | yes      | It reads nothing while the headset is off.                                                       |
 | Rapoo    | VT3 PRO              | Mouse      | Dongle or cable   | yes       | yes      | On the cable it reports only now and then, so the reading may go stale. No level while charging. |
