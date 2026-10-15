@@ -62,7 +62,7 @@ src/DeviceBatteryInfo/
                            BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate),
                            ChargingInference (a rising level -> Charging, for sources that cannot tell)
   Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands
-                           Razer, Logitech, Corsair, Rapoo, Aula, Sony), each a pure parser + an IO
+                           Razer, Logitech, Corsair, Rapoo, Aula, Sony, Mchose), each a pure parser + an IO
                            wrapper behind an interface + IBatterySource(+Provider);
                            SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset,
                            Linux: /sys/class/power_supply) and Bluetooth has IBluetoothBatteryReader
@@ -93,7 +93,7 @@ tests/DeviceBatteryInfo.Tests/
   HidFamilyTests.cs               probing, path caching, identical units, refused (unopenable) devices
   HidProtocolTests.cs             a second protocol on the shared HID plumbing, dongle or cable, push-only
   <Brand>ProtocolTests.cs         per-brand HID frames captured on real hardware (Logitech, Corsair,
-                                  Rapoo, AULA, Sony)
+                                  Rapoo, AULA, Sony, MCHOSE)
   MacOsSourceTests.cs             pmset and system_profiler parsers, the Bluetooth snapshot, the system
                                   source
   LinuxSourceTests.cs             power_supply and BlueZ parsers, sysfs HID interface and unit keys
@@ -512,6 +512,18 @@ Design knowledge that is not obvious from the code alone:
   `IHidTransport.GetFeatureAsync`, which only reads; `ExchangeAsync` always writes a feature first,
   and writing `0x05` is something no reference implementation does. Lightbar, player LEDs, rumble
   and adaptive triggers live in output report `0x02` (USB) and are not used.
+- **The MCHOSE V9 Pro was mapped from the owner's USB captures, then read through the plugin's hardware
+  tests by the owner.** `Sources/Mchose/MchoseProtocol.cs` (dongle `291D:385D`, `FF90:0001`, 64-byte
+  reports) writes `55 65 01`, which is what the MCHOSE app sends, and the dongle answers `55 65` with the
+  level in byte 2 and the state in byte 3 within about 25 ms, without the MCHOSE app running. The level
+  moves in 10% steps. State `0x02` is on battery. With the cable in, the query answers `0x00` both while
+  charging and when full, and the frames the dongle pushes say `0x03`; the level stays frozen at its value
+  from when the cable went in (90 for over two hours, through to full), so both read as Charging with no
+  percent, as on Rapoo and AULA. Right after unplugging, the level can still be the frozen one for about
+  30 s before the real value arrives; the next poll picks that up. A switched-off headset leaves the
+  query unanswered, so the read times out; the dongle pushes `00 1A` once when it goes off, which also
+  throws instead of publishing 0%. On battery the dongle pushes only on changes, so the read must ask.
+  It also pushes `55 11 02` when the headset connects, which the reply match rejects.
 - **HID on macOS goes through IOKit directly (`Sources/Hid/MacHid.cs`), not through HidSharp.** HidSharp
   lists a device by `IORegistryEntryGetPath` and reopens it by `IORegistryEntryFromPath`, both capped at a
   512-byte `io_string_t`; a longer path fails with `kIOReturnBadArgument` and the device silently drops out

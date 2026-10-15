@@ -109,6 +109,7 @@ listed here is not supported even if it shares a brand or protocol with one that
 | Rapoo    | VT3 PRO              | Mouse      | Dongle or cable   | yes       | yes      | On the cable it reports only now and then, so the reading may go stale. No level while charging. |
 | AULA     | F75                  | Keyboard   | 2.4G receiver     | yes       | yes      | No level while the cable is in, only that it charges. Not read in wired mode.                    |
 | Sony     | DualSense            | Controller | USB or Bluetooth  | 10% steps | yes      | The controller reports its level in steps of 10%.                                                |
+| MCHOSE   | V9 Pro               | Headset    | Dongle            | 10% steps | yes      | No level while charging, only that it charges. It reads nothing while the headset is off.        |
 
 The exact list is always the "Other devices" step of the config flow, which is built from the same
 code. If this table and the flow ever disagree, the flow is right; please fix the table.
@@ -224,7 +225,7 @@ src/DeviceBatteryInfo/
   Core/                    IBatterySource, BatteryReading, BatteryRegistry, BatteryPollingService,
                            BatteryPluginOptions, DeviceCatalog, DeviceAccessProblems
   Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands Razer,
-                           Logitech, Corsair, Rapoo, Aula, Sony): a pure parser, an IO wrapper behind an
+                           Logitech, Corsair, Rapoo, Aula, Sony, Mchose): a pure parser, an IO wrapper behind an
                            interface, and an IBatterySource(+Provider).
                            Hid/ is the shared HID transport, base class and family; a brand adds one
                            protocol file whose device list is one line per supported model
