@@ -28,6 +28,10 @@ src/DeviceBatteryInfo/
   BatteryIntegration.Widgets.cs   the same partial class: IWidgetTypeProvider + IUiProvider
   BatteryIntegration.Issues.cs    the same partial class: IIntegrationIssueProvider (the Linux HID
                            permission issue)
+  BatteryIntegration.Batteries.cs the same partial class: IBatteryProvider (SDK beta.17), feeding
+                           Macro Deck's own battery catalog and built-in Battery widget
+  HostBatteries/           HostBatteryDevices (slot + snapshot -> BatteryDevice), HostBatteryPublisher
+                           (one diffed publish per poll, RemoveAsync for a deleted entry)
   ConfigFlow/              DeviceConfigFlow (host-rendered steps per device: basics picks a name and
                            a category, "Other devices" adds a brand/model step; a backend that still
                            needs an address or a device name (adb, Bluetooth) then gets a details
@@ -92,6 +96,8 @@ tests/DeviceBatteryInfo.Tests/
   MacOsSourceTests.cs             pmset and system_profiler parsers, the Bluetooth snapshot, the system
                                   source
   LinuxSourceTests.cs             power_supply and BlueZ parsers, sysfs HID interface and unit keys
+  HostBatteryPublisherTests.cs    the host battery catalog: one publish per change, renames, deletes,
+                                  out-of-reach devices, the kind mapping
   HidTransportPlatformTests.cs    macOS entry ids and descriptors (a captured G Pro X Wireless one), Windows
                                   interface and unit keys, the bounded exchange on a fake channel,
                                   vendor-collection matching
@@ -268,6 +274,20 @@ Design knowledge that is not obvious from the code alone:
   released widgets already store `showTrend: true`, which would shrink every existing ring. Both the `trend`
   and `trend-rate` variable suffixes are public API like every other field suffix in
   `BatteryVariableCatalog`.
+- **Every configured device is also published to Macro Deck's own battery catalog** (`IBatteryProvider`,
+  SDK beta.17), which drives the host's built-in Battery widget and its own `battery_<name>_<hash>_*`
+  variables. That naming lives in the host only, so this plugin's `battery_<id>_*` variables are kept
+  as they are and never renamed to match. A host device's id is the config entry's GUID
+  (`HostBatteryDevices.IdOf`), not the slot id: the slot id follows the name, so a rename would leave a
+  dead device behind. Publishing counts toward the shared callback throttle, so `HostBatteryPublisher`
+  runs once per poll (`BatteryPollingService.Polled`), sends the whole set in one `PublishAsync` only
+  when it differs from the last one sent, and on a failure keeps its last state so the next poll
+  retries. A deleted entry is `RemoveAsync`ed (the host deletes its variables); a device that is stale,
+  unreadable or no longer discovered is published with `IsConnected = false` and its last level, as
+  the host expects for "out of reach". The host withdraws every device when it re-initializes the
+  provider, so `AttachAsync` forgets what it sent. Our kinds map to the host's closest one (headset and
+  earbuds to headphones, the system battery to laptop, pen and VR headset to other); our own widget
+  keeps its icons.
 - **Charging is inferred where a source cannot tell.** Bluetooth only ever reports a level, so
   `BluetoothBatterySource` fills in `Discharging` with `BatteryReading.StatusIsAssumed`; an `Unknown`
   status counts the same. `ChargingInference` (a DI singleton like `BatteryTrendTracker`, applied by

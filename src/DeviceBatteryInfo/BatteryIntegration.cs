@@ -1,6 +1,7 @@
 using DeviceBatteryInfo.Actions;
 using DeviceBatteryInfo.ConfigFlow;
 using DeviceBatteryInfo.Core;
+using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Variables;
 using MacroDeck.Localization;
 using MacroDeck.Plugin.Hosting.Integrations.HostApis;
@@ -21,6 +22,7 @@ public sealed partial class BatteryIntegration(
     DeviceModelCatalog models,
     IDeviceDiscovery discovery,
     DeviceAccessProblems accessProblems,
+    HostBatteryPublisher hostBatteries,
     ILogger logger
 ) : IPluginIntegration, IVariableProvider, IEventProvider, IConfigFlowProvider
 {
@@ -37,6 +39,7 @@ public sealed partial class BatteryIntegration(
     private readonly DeviceModelCatalog _models = models;
     private readonly IDeviceDiscovery _discovery = discovery;
     private readonly DeviceAccessProblems _accessProblems = accessProblems;
+    private readonly HostBatteryPublisher _hostBatteries = hostBatteries;
     private readonly ILogger _logger = logger.ForContext<BatteryIntegration>();
 
     private IIntegrationContext? _context;

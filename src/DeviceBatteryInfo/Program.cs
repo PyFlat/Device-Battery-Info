@@ -1,5 +1,6 @@
 using DeviceBatteryInfo;
 using DeviceBatteryInfo.Core;
+using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Sources;
 using MacroDeck.Plugin.Hosting;
 using MacroDeck.Plugin.Serilog;
@@ -20,6 +21,7 @@ builder.Services.AddSingleton<BatteryRegistry>();
 builder.Services.AddSingleton<BatteryTrendTracker>();
 builder.Services.AddSingleton<ChargingInference>();
 builder.Services.AddSingleton<DeviceCatalog>();
+builder.Services.AddSingleton<HostBatteryPublisher>();
 builder.Services.AddBatterySources();
 
 builder.Services.AddSingleton<BatteryPollingService>();

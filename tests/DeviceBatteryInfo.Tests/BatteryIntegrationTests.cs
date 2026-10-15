@@ -1,4 +1,5 @@
 using DeviceBatteryInfo.Core;
+using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Sources;
 using MacroDeck.Plugin.Testing;
 using MacroDeck.Sdk;
@@ -23,6 +24,7 @@ public sealed class BatteryIntegrationTests
             builder.Services.AddSingleton<BatteryTrendTracker>();
             builder.Services.AddSingleton<ChargingInference>();
             builder.Services.AddSingleton<DeviceCatalog>();
+            builder.Services.AddSingleton<HostBatteryPublisher>();
             builder.Services.AddBatterySources();
             builder.Services.AddSingleton<BatteryPollingService>();
         });
@@ -54,6 +56,38 @@ public sealed class BatteryIntegrationTests
         await using var harness = CreateHarness();
 
         Assert.DoesNotThrowAsync(harness.InitializeIntegrationsAsync);
+    }
+
+    [Test]
+    public async Task The_configured_devices_reach_the_host_battery_catalog()
+    {
+        await using var harness = CreateHarness();
+        await harness.InitializeIntegrationsAsync();
+        var entryId = Guid.NewGuid();
+        harness
+            .Services.GetRequiredService<DeviceCatalog>()
+            .Set(
+                [
+                    new BatterySlot(
+                        "mouse",
+                        "Mouse",
+                        BatterySourceKind.Mouse,
+                        DeviceType.Catalog,
+                        EntryId: entryId
+                    ),
+                ]
+            );
+
+        await harness.Services.GetRequiredService<HostBatteryPublisher>().SyncAsync(default);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(harness.Declared.Select(c => c.Kind), Does.Contain("battery-provider"));
+            Assert.That(
+                harness.Context.BatteryProvider.Devices.Keys,
+                Is.EqualTo(new[] { HostBatteryDevices.IdOf(entryId) })
+            );
+        }
     }
 
     [Test]

@@ -1,4 +1,5 @@
 using DeviceBatteryInfo.Core;
+using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Sources;
 using MacroDeck.Plugin.Testing.Fakes;
 using Microsoft.Extensions.Options;
@@ -75,6 +76,7 @@ public sealed class CatalogNotificationTests
             TestModels.Catalog(),
             new NoDiscovery(),
             new DeviceAccessProblems(),
+            new HostBatteryPublisher(catalog, registry, Serilog.Core.Logger.None),
             Serilog.Core.Logger.None
         );
     }
