@@ -24,6 +24,8 @@ internal sealed class MchoseProtocol()
     private const byte OnBattery = 0x02;
 
     // The level freezes at its value from when the cable went in, so it says nothing about the charge.
+    // A query answers OnCable both while charging and when full; the pushed frames say Charging.
+    private const byte OnCable = 0x00;
     private const byte Charging = 0x03;
 
     private const byte HeadsetOff = 0x1A;
@@ -49,7 +51,7 @@ internal sealed class MchoseProtocol()
 
         return state switch
         {
-            Charging => new BatteryReading { Status = BatteryStatus.Charging },
+            OnCable or Charging => new BatteryReading { Status = BatteryStatus.Charging },
             OnBattery when level <= 100 => BatteryReading.FromPercent(level, BatteryStatus.Discharging),
             HeadsetOff => throw new InvalidOperationException("The headset is off."),
             _ => throw new InvalidOperationException($"The headset reported level {level}, state {state}."),
