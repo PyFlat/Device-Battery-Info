@@ -49,6 +49,12 @@ plugin's variables, which stay unchanged. A device you are not reaching right no
 last level and shows as disconnected; deleting the device removes it. Macro Deck lets every installed
 plugin read these devices (name, kind and level).
 
+**Devices from other plugins** work the other way round: the widgets' device list also offers every
+device another plugin or Macro Deck itself reports to Macro Deck (for example the phones of the
+built-in ADB integration), shown as "device - plugin". They appear in the widgets only, with their
+level, charging state and connection; they get no variables or events from this plugin and no battery
+trend. A widget with no devices picked still shows only this plugin's devices.
+
 ## Supported devices
 
 ### Generic sources
@@ -212,7 +218,8 @@ src/DeviceBatteryInfo/
   BatteryIntegration.Widgets.cs   the same partial class: IWidgetTypeProvider + IUiProvider
   BatteryIntegration.Issues.cs    the same partial class: IIntegrationIssueProvider (Linux HID access)
   BatteryIntegration.Batteries.cs the same partial class: IBatteryProvider (Macro Deck's battery catalog)
-  HostBatteries/           configured devices -> Macro Deck's battery catalog, published after each poll
+  HostBatteries/           configured devices -> Macro Deck's battery catalog, published after each poll,
+                           and other providers' devices from that catalog for the widgets
   ConfigFlow/              the device config flow (add/edit steps, discovery, the "Other devices" catalog)
   Core/                    IBatterySource, BatteryReading, BatteryRegistry, BatteryPollingService,
                            BatteryPluginOptions, DeviceCatalog, DeviceAccessProblems

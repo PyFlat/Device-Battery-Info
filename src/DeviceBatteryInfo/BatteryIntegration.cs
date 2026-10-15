@@ -56,6 +56,7 @@ public sealed partial class BatteryIntegration(
     public async Task InitializeAsync(IIntegrationContext context)
     {
         _context = context;
+        AttachBatteryCatalog(context.Batteries);
 
         _registry.Changed -= OnSnapshotChanged;
         _registry.Changed += OnSnapshotChanged;
@@ -90,6 +91,7 @@ public sealed partial class BatteryIntegration(
     {
         _registry.Changed -= OnSnapshotChanged;
         _catalog.Changed -= OnDeviceCatalogChanged;
+        DetachBatteryCatalog();
         _context = null;
         _sink = null;
         return Task.CompletedTask;

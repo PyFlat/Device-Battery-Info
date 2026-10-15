@@ -31,7 +31,8 @@ src/DeviceBatteryInfo/
   BatteryIntegration.Batteries.cs the same partial class: IBatteryProvider (SDK beta.17), feeding
                            Macro Deck's own battery catalog and built-in Battery widget
   HostBatteries/           HostBatteryDevices (slot + snapshot -> BatteryDevice), HostBatteryPublisher
-                           (one diffed publish per poll, RemoveAsync for a deleted entry)
+                           (one diffed publish per poll, RemoveAsync for a deleted entry),
+                           ExternalBatteryDevices (other providers' devices for the widgets)
   ConfigFlow/              DeviceConfigFlow (host-rendered steps per device: basics picks a name and
                            a category, "Other devices" adds a brand/model step; a backend that still
                            needs an address or a device name (adb, Bluetooth) then gets a details
@@ -98,6 +99,8 @@ tests/DeviceBatteryInfo.Tests/
   LinuxSourceTests.cs             power_supply and BlueZ parsers, sysfs HID interface and unit keys
   HostBatteryPublisherTests.cs    the host battery catalog: one publish per change, renames, deletes,
                                   out-of-reach devices, the kind mapping
+  ExternalBatteryDevicesTests.cs  other providers' devices in the picker and as widget rows, our own
+                                  filtered out, a live widget session, the reverse kind and state mapping
   HidTransportPlatformTests.cs    macOS entry ids and descriptors (a captured G Pro X Wireless one), Windows
                                   interface and unit keys, the bounded exchange on a fake channel,
                                   vendor-collection matching
@@ -288,6 +291,16 @@ Design knowledge that is not obvious from the code alone:
   provider, so `AttachAsync` forgets what it sent. Our kinds map to the host's closest one (headset and
   earbuds to headphones, the system battery to laptop, pen and VR headset to other); our own widget
   keeps its icons.
+- **The widgets can also show other providers' devices** from the same catalog
+  (`IIntegrationContext.Batteries`, read through `ExternalBatteryDevices`). They are widget-only: no
+  `battery_<id>_*` variables, no events, no trend. A widget stores one by its qualified catalog id
+  (`<provider>:<id>`), whose colon keeps it apart from every slot id, and an empty `sourceIds` still
+  means this plugin's devices only, so existing widgets do not grow new rows. Our own devices come back
+  through the catalog too and are filtered out by the local id we published. The row id is a hash of the
+  catalog id (`RowKey`), because a `UiRepeat` key takes no colon. The host drops a `Changed` handler
+  subscribed through the context on every re-initialization, and widget sessions outlive that, so the
+  integration re-subscribes in `InitializeAsync` and re-raises its own `BatteryCatalogChanged` for the
+  sessions. A withdrawn device (its plugin stopped) drops out of the widget until it is published again.
 - **Charging is inferred where a source cannot tell.** Bluetooth only ever reports a level, so
   `BluetoothBatterySource` fills in `Discharging` with `BatteryReading.StatusIsAssumed`; an `Unknown`
   status counts the same. `ChargingInference` (a DI singleton like `BatteryTrendTracker`, applied by
