@@ -6,6 +6,7 @@ using DeviceBatteryInfo.Sources.Hid;
 using DeviceBatteryInfo.Sources.Aula;
 using DeviceBatteryInfo.Sources.Corsair;
 using DeviceBatteryInfo.Sources.Logitech;
+using DeviceBatteryInfo.Sources.Mchose;
 using DeviceBatteryInfo.Sources.Rapoo;
 using DeviceBatteryInfo.Sources.Razer;
 using DeviceBatteryInfo.Sources.SystemBattery;
@@ -29,6 +30,7 @@ public sealed class HardwareTests
         new RapooProtocol(),
         new AulaProtocol(),
         new SonyProtocol(),
+        new MchoseProtocol(),
     ];
 
     [SetUp]

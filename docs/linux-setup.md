@@ -2,7 +2,7 @@
 
 Most of the plugin works on Linux without any setup: this computer's battery, Android phones through
 Macro Deck's adb, and Bluetooth devices. **Only the USB devices from the "Other devices" catalog** (Razer,
-Logitech, Corsair, Rapoo, AULA and Sony) need a one-time permission. If Macro Deck shows the problem
+Logitech, Corsair, Rapoo, AULA, Sony and MCHOSE) need a one-time permission. If Macro Deck shows the problem
 *"Linux needs a one-time permission to read a device"* for this plugin, this page is the fix.
 
 ## Why it is needed
@@ -42,6 +42,8 @@ printf '%s\n' \
   '# Logitech G Pro X Superlight 2' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c54d", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c09b", TAG+="uaccess"' \
+  '# MCHOSE V9 Pro' \
+  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="291d", ATTRS{idProduct}=="385d", TAG+="uaccess"' \
   '# Rapoo VT3 PRO' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="24ae", ATTRS{idProduct}=="1215", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="24ae", ATTRS{idProduct}=="4415", TAG+="uaccess"' \
