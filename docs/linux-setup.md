@@ -45,9 +45,10 @@ printf '%s\n' \
   '# Logitech G Pro X Superlight 2' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c54d", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c09b", TAG+="uaccess"' \
-  '# Logitech G502 X PLUS' \
+  '# Logitech G502 X PLUS and G915 (one receiver id, c547, for both)' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c547", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c095", TAG+="uaccess"' \
+  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c33e", TAG+="uaccess"' \
   '# MCHOSE V9 Pro' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="291d", ATTRS{idProduct}=="385d", TAG+="uaccess"' \
   '# Rapoo VT3 PRO' \

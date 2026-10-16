@@ -3,8 +3,8 @@ using DeviceBatteryInfo.Sources.Hid;
 
 namespace DeviceBatteryInfo.Sources.Logitech;
 
-// Mice that report a battery voltage (0x1001) instead of a percentage.
-// Read on a G502 Lightspeed, on the cable (C08D) and behind its receiver (C539).
+// Devices that report a battery voltage (0x1001) instead of a percentage.
+// Read on a G502 Lightspeed (receiver C539, cable C08D); the G915 (C547, C33E) lists the same feature.
 internal sealed class LogitechVoltageBatteryProtocol() : LogitechHidppProtocol(0xFF00, 0x0002, DeviceIndex)
 {
     internal const byte DeviceIndex = 0x01;
@@ -38,7 +38,10 @@ internal sealed class LogitechVoltageBatteryProtocol() : LogitechHidppProtocol(0
     protected override byte BatteryFunction => 0x00;
 
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
-        [new("G502 Lightspeed", 0xC539, 0xC08D)];
+        [
+            new("G502 Lightspeed", 0xC539, 0xC08D),
+            new("G915", 0xC547, 0xC33E) { Kind = BatterySourceKind.Keyboard },
+        ];
 
     protected override BatteryReading ParseBattery(ReadOnlySpan<byte> report) => ParseVoltage(report);
 
@@ -49,7 +52,7 @@ internal sealed class LogitechVoltageBatteryProtocol() : LogitechHidppProtocol(0
         var millivolts = report[4] << 8 | report[5];
         if (millivolts == 0)
         {
-            throw new InvalidOperationException("The mouse reported 0 mV: it is off or asleep.");
+            throw new InvalidOperationException("The device reported 0 mV: it is off or asleep.");
         }
 
         var percent = PercentFromMillivolts(millivolts);
