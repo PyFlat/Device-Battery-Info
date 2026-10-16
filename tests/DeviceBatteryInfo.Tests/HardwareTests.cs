@@ -390,22 +390,26 @@ public sealed class HardwareTests
         return features;
     }
 
-    // For calibrating the 0x1001 curve against G Hub: the raw voltage behind the percentage.
+    // For calibrating the 0x1001 and 0x1F20 curves against G Hub: the raw voltage behind the percentage.
     [Test]
     public async Task Reads_the_raw_logitech_battery_voltage()
     {
-        var probe = new LogitechVoltageProbe();
-        var (_, sources) = await DiscoverAsync([probe]);
-        Assume.That(sources, Is.Not.Empty, "No Logitech mouse with a battery voltage is connected.");
-
-        foreach (var source in sources)
+        var read = 0;
+        foreach (var probe in new IVoltageProbe[] { new LogitechVoltageProbe(), new LogitechHeadsetVoltageProbe() })
         {
-            var reading = await source.ReadAsync(CancellationToken.None);
-            HardwareReport.Line(
-                $"{source.Id} {DateTime.Now:HH:mm:ss}",
-                $"{probe.Millivolts} mV flags 0x{probe.Flags:X2} = {reading.Percent}% {reading.Status}"
-            );
+            var (_, sources) = await DiscoverAsync([(HidProtocol)probe]);
+            foreach (var source in sources)
+            {
+                var reading = await source.ReadAsync(CancellationToken.None);
+                HardwareReport.Line(
+                    $"{source.Id} {DateTime.Now:HH:mm:ss}",
+                    $"{probe.Millivolts} mV flags 0x{probe.Flags:X2} = {reading.Percent}% {reading.Status}"
+                );
+                read++;
+            }
         }
+
+        Assume.That(read, Is.GreaterThan(0), "No Logitech device with a battery voltage is connected.");
     }
 
     // Stands in for Razer Synapse polling the same control interface.
@@ -512,7 +516,37 @@ public sealed class HardwareTests
             );
     }
 
-    private sealed class LogitechVoltageProbe() : LogitechHidppProtocol(0xFF00, 0x0002, 0x01)
+    private interface IVoltageProbe
+    {
+        int Millivolts { get; }
+
+        byte Flags { get; }
+    }
+
+    private sealed class LogitechHeadsetVoltageProbe()
+        : LogitechHidppProtocol(0xFF43, 0x0202, LogitechHeadsetProtocol.DeviceIndex), IVoltageProbe
+    {
+        private readonly LogitechHeadsetProtocol _protocol = new();
+
+        public int Millivolts { get; private set; }
+
+        public byte Flags { get; private set; }
+
+        public override IReadOnlyList<HidDeviceInfo> Devices => _protocol.Devices;
+
+        protected override ushort BatteryFeature => 0x1F20;
+
+        protected override byte BatteryFunction => 0x00;
+
+        protected override BatteryReading ParseBattery(ReadOnlySpan<byte> report)
+        {
+            Millivolts = report[4] << 8 | report[5];
+            Flags = report[6];
+            return LogitechHeadsetProtocol.ParseVoltage(report);
+        }
+    }
+
+    private sealed class LogitechVoltageProbe() : LogitechHidppProtocol(0xFF00, 0x0002, 0x01), IVoltageProbe
     {
         private readonly LogitechVoltageBatteryProtocol _protocol = new();
 

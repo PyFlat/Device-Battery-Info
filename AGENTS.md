@@ -416,9 +416,17 @@ Design knowledge that is not obvious from the code alone:
   headsets). Verified on a G Pro X Wireless `0ABA`: same HID++, but on `FF43:0202`,
   addressed as the receiver (device index `0xFF`), and they have no battery feature at all - only
   `0x1F20` (ADC measurement), which answers a voltage in mV, not a percentage, plus a state byte where
-  `0x03` means charging. The mV are mapped through HeadsetControl's G Pro calibration points, linearly
-  interpolated; that curve is an estimate, so treat the percentage as approximate and never as a value
-  to calibrate other code against. A powered-off headset reads far below the curve, which is why
+  `0x03` means charging. The mV are mapped through points sampled from G Hub's own power model for the
+  headset (`C:\ProgramData\LGHUB\depots\<n>\pro_headset\pro_x_wireless_headset_battery.xml`, voltage
+  against mAh drawn), linearly interpolated: 3924 mV read 82% against G Hub's 79%, where HeadsetControl's
+  G Pro points, used before, read 65%. G Hub's other devices may ship such a file too; look there before
+  taking a curve from elsewhere. It is still an estimate, never a value to calibrate other code against.
+  On the cable (state `0x03`) the voltage reads high (4281 mV while G Hub showed 87%), so a charge uses
+  the same file's charge curve instead: rising to about 4275 mV at 87%, then falling to about 4206 mV
+  while the battery fills to 100%. A voltage alone cannot tell the two parts apart, so
+  `LogitechHeadsetCharge` follows one charge per device path (the turn is a drop of 5 mV below the
+  peak, the reading never goes down) and is forgotten on the first reading off the charger.
+  A powered-off headset reads far below the curve, which is why
   `ParseVoltage` throws there instead of publishing 0%. Older Lightspeed mice (the G502 Lightspeed,
   `LogitechVoltageBatteryProtocol`) have only `0x1001` (battery voltage): mV big-endian in bytes 4-5,
   then a flags byte where bit 7 is external power and, only while it is set, bits 0-2 are the charge

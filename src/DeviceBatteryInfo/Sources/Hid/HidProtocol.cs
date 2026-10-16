@@ -32,6 +32,8 @@ internal sealed class HidChannel(
 
     public int ProductId { get; } = productId;
 
+    public string DevicePath { get; } = devicePath;
+
     // Returns the first response isComplete accepts. Throws when none does, so the poll keeps
     // the last good value.
     public Task<byte[]> ExchangeAsync(

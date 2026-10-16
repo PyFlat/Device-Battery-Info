@@ -31,6 +31,10 @@ internal abstract class LogitechHidppProtocol(int usagePage, int usage, byte dev
 
     protected abstract BatteryReading ParseBattery(ReadOnlySpan<byte> report);
 
+    // For a product line that keeps state per device between reads.
+    protected virtual BatteryReading ParseBattery(HidChannel channel, ReadOnlySpan<byte> report) =>
+        ParseBattery(report);
+
     public sealed override async Task<BatteryReading> ReadAsync(
         HidChannel channel,
         HidDeviceInfo device,
@@ -50,7 +54,7 @@ internal abstract class LogitechHidppProtocol(int usagePage, int usage, byte dev
             response => IsReplyTo(response, deviceIndex, featureIndex, function),
             cancellationToken
         );
-        return ParseBattery(batteryResponse);
+        return ParseBattery(channel, batteryResponse);
     }
 
     internal static byte Function(byte functionId) => (byte)(functionId << 4 | SoftwareId);
@@ -108,7 +112,7 @@ internal abstract class LogitechHidppProtocol(int usagePage, int usage, byte dev
     {
         if (millivolts >= curve[0].Millivolts)
         {
-            return 100;
+            return curve[0].Percent;
         }
 
         for (var i = 1; i < curve.Length; i++)
