@@ -405,7 +405,7 @@ public sealed class HardwareTests
 
         public void Emit(Serilog.Events.LogEvent logEvent) =>
             _lines.Enqueue(
-                logEvent.RenderMessage()
+                logEvent.RenderMessage(System.Globalization.CultureInfo.InvariantCulture)
                     + (logEvent.Exception is { } exception ? $" ({exception.Message})" : "")
             );
     }
