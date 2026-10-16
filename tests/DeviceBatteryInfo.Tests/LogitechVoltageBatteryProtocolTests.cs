@@ -49,6 +49,20 @@ public sealed class LogitechVoltageBatteryProtocolTests
         Assert.That(StatusWithFlags(flags), Is.EqualTo(status));
     }
 
+    [Test]
+    public void Charging_has_no_percent_and_full_reads_100()
+    {
+        var charging = LogitechVoltageBatteryProtocol.ParseVoltage(Frame("110106010FCA80"));
+        var full = LogitechVoltageBatteryProtocol.ParseVoltage(Frame("110106011049" + "81"));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(charging.Percent, Is.Null);
+            Assert.That(charging.Status, Is.EqualTo(BatteryStatus.Charging));
+            Assert.That(full.Percent, Is.EqualTo(100));
+        }
+    }
+
     [TestCase(0x01)]
     [TestCase(0x20)]
     public void Without_external_power_the_mouse_is_discharging(byte flags)

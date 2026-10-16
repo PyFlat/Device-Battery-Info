@@ -59,17 +59,22 @@ internal sealed class LogitechVoltageBatteryProtocol() : LogitechHidppProtocol(0
         var flags = report[6];
 
         // The charge state bits only mean something while external power is connected.
-        var status = (flags & ExternalPower) == 0
-            ? percent >= 100 ? BatteryStatus.Full : BatteryStatus.Discharging
-            : (flags & ChargeStateMask) switch
-            {
-                0 => BatteryStatus.Charging,
-                1 => BatteryStatus.Full,
-                2 => BatteryStatus.Discharging,
-                _ => BatteryStatus.Unknown,
-            };
+        if ((flags & ExternalPower) == 0)
+        {
+            return BatteryReading.FromPercent(
+                percent,
+                percent >= 100 ? BatteryStatus.Full : BatteryStatus.Discharging
+            );
+        }
 
-        return new BatteryReading { Percent = percent, Status = status };
+        // The voltage reads high while charging (87% against G Hub's 82% on a G915), so no percent then.
+        return (flags & ChargeStateMask) switch
+        {
+            0 => new BatteryReading { Status = BatteryStatus.Charging },
+            1 => BatteryReading.FromPercent(100, BatteryStatus.Full),
+            2 => BatteryReading.FromPercent(percent, BatteryStatus.Discharging),
+            _ => BatteryReading.FromPercent(percent),
+        };
     }
 
     internal static int PercentFromMillivolts(int millivolts) =>
