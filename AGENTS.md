@@ -482,7 +482,9 @@ Design knowledge that is not obvious from the code alone:
   design (a raw USB id alone cannot drive the Razer HID protocol); an unlisted device is a model in a
   family.
 - **The Logitech G Pro X 2 Lightspeed (`0AF7`) is not HID++ but Logitech's "Centurion" framing**, mapped
-  from Solaar and HeadsetControl as HaloBattery documents them, not yet read through the plugin.
+  from Solaar and HeadsetControl as HaloBattery documents them, then read through the plugin's hardware
+  tests by the owner (receiver features `0000 0001 0100 0003 010A`, headset via bridge 3 `0000 0001 0101
+  0100 0104 010A 0108 0604 0602 0636`, the same as Solaar's dump; `59 59 00` = 89% matched G HUB).
   `Sources/Logitech/LogitechCenturionProtocol.cs` talks on `FFA0:0001` (64-byte reports, interface 3):
   a frame is `51 <len> <flags> <payload>`, `len` = payload + 1. The receiver answers its own features
   directly (`<index> <function|sw id>`, an error is `FF <index> <function> <code>`) and reaches the
@@ -492,7 +494,8 @@ Design knowledge that is not obvious from the code alone:
   the bridge, Root getFeature for the headset's battery `0x0104` through the bridge, then its getStatus:
   byte 0 the level, byte 2 the state (`0` discharging, `1` charging, `2` charging over USB, `3`
   complete). A headset that is off leaves only the acknowledgement, so the read times out.
-  HaloBattery and Solaar find the indices by listing FeatureSet instead of asking Root for each id;
+  HaloBattery and Solaar find the indices by listing FeatureSet; asking Root for each id directly works
+  on the real headset too, and takes far fewer exchanges.
   `HardwareTests.Lists_the_centurion_features_of_the_logitech_headset` does that listing to show where a
   read stops. HeadsetControl's fixed request for firmware without `0x0104` is not implemented.
 - **The Corsair VOID headsets answer one output report.** `Sources/Corsair/CorsairProtocol.cs`
