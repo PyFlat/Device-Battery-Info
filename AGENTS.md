@@ -419,7 +419,18 @@ Design knowledge that is not obvious from the code alone:
   `0x03` means charging. The mV are mapped through HeadsetControl's G Pro calibration points, linearly
   interpolated; that curve is an estimate, so treat the percentage as approximate and never as a value
   to calibrate other code against. A powered-off headset reads far below the curve, which is why
-  `ParseVoltage` throws there instead of publishing 0%. Ask the device for its feature table
+  `ParseVoltage` throws there instead of publishing 0%. Older Lightspeed mice (the G502 Lightspeed,
+  `LogitechVoltageBatteryProtocol`) have only `0x1001` (battery voltage): mV big-endian in bytes 4-5,
+  then a flags byte where bit 7 is external power and, only while it is set, bits 0-2 are the charge
+  state (`0` charging, `1` full, `2` not charging, else error) as the kernel reads it; bit 5 is the
+  critical level, never "full". On external power the voltage reads high (a G915 read 87% on the cable
+  while G Hub showed 82%, a G502 Lightspeed jumped to almost 100%), so charging reads with no percent,
+  as on Rapoo, AULA and MCHOSE, and full reads 100. Its curve is the kernel's full 100-entry 0x1001 table, again
+  an estimate (G Hub uses its own per-device table); `HardwareTests` prints the raw mV for calibrating. The `C539` receiver is shared by other
+  `0x1001` mice (G Pro Wireless, G703, G903), which would show under the G502 name. The G915 keyboard is on
+  the same protocol (receiver `C547`, cable `C33E`, device index 1 on both); its feature table lists `0x1001`
+  and no `0x1004`, and the same `C547` receiver ships with the G502 X PLUS (`0x1004`), so the battery
+  feature is what tells the two receivers apart. Ask the device for its feature table
   (`0x0001` getCount + getFeatureId) before assuming a feature index. `Sources/Razer/RazerProtocol.cs` is the Razer report layout, command ids
   and checksum. **Only the DeathAdder V3 Pro has been tested on real hardware.** The command class
   (0x07, "power") and ids are plausibly shared across Razer mice, but a mouse is added to

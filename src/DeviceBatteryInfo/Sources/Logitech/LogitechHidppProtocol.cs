@@ -98,4 +98,36 @@ internal abstract class LogitechHidppProtocol(int usagePage, int usage, byte dev
             throw new InvalidOperationException($"HID++ error 0x{report[5]:X2} {what}.");
         }
     }
+
+    // Linear between the calibration points (highest voltage first), which is as much as a voltage
+    // reading is worth.
+    internal static int PercentFromMillivolts(
+        int millivolts,
+        ReadOnlySpan<(int Millivolts, int Percent)> curve
+    )
+    {
+        if (millivolts >= curve[0].Millivolts)
+        {
+            return 100;
+        }
+
+        for (var i = 1; i < curve.Length; i++)
+        {
+            var (low, lowPercent) = curve[i];
+            if (millivolts < low)
+            {
+                continue;
+            }
+
+            var (high, highPercent) = curve[i - 1];
+            return lowPercent
+                + (int)
+                    Math.Round(
+                        (millivolts - low) / (double)(high - low) * (highPercent - lowPercent),
+                        MidpointRounding.AwayFromZero
+                    );
+        }
+
+        return 0;
+    }
 }
