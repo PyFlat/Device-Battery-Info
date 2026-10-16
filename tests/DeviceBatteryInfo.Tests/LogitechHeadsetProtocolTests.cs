@@ -38,7 +38,7 @@ public sealed class LogitechHeadsetProtocolTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(LogitechHidppProtocol.ParseFeatureIndex(FeatureAnswer), Is.EqualTo(6));
-            Assert.That(reading.Percent, Is.EqualTo(78));
+            Assert.That(reading.Percent, Is.EqualTo(91));
             Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Discharging));
         }
     }
@@ -52,6 +52,52 @@ public sealed class LogitechHeadsetProtocolTests
             LogitechHeadsetProtocol.ParseVoltage(charging).Status,
             Is.EqualTo(BatteryStatus.Charging)
         );
+    }
+
+    [Test]
+    public void A_charging_headset_reads_from_the_charge_curve()
+    {
+        // 4281 mV on the cable, read while G Hub showed 87%.
+        var charging = LogitechHeadsetProtocol.ParseVoltage(Frame("11FF060110B90300"));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(charging.Percent, Is.EqualTo(87));
+            Assert.That(charging.Status, Is.EqualTo(BatteryStatus.Charging));
+        }
+    }
+
+    [Test]
+    public void A_charge_rises_turns_after_its_peak_and_never_reads_lower()
+    {
+        var charge = new LogitechHeadsetCharge();
+
+        int[] readings =
+        [
+            charge.Update(4097),
+            charge.Update(4199),
+            charge.Update(4275),
+            charge.Update(4273),
+            charge.Update(4264),
+            charge.Update(4241),
+            charge.Update(4245),
+            charge.Update(4206),
+        ];
+
+        Assert.That(readings, Is.EqualTo(new[] { 55, 76, 87, 87, 88, 93, 93, 100 }));
+    }
+
+    [Test]
+    public void A_dip_low_on_the_rising_part_is_not_taken_for_the_turn()
+    {
+        var charge = new LogitechHeadsetCharge();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(charge.Update(4100), Is.EqualTo(56));
+            Assert.That(charge.Update(4090), Is.EqualTo(56));
+            Assert.That(charge.Update(4199), Is.EqualTo(76));
+        }
     }
 
     [Test]
@@ -104,11 +150,12 @@ public sealed class LogitechHeadsetProtocolTests
     }
 
     [TestCase(4200, 100)]
-    [TestCase(4150, 100)]
-    [TestCase(3990, 75)]
-    [TestCase(3830, 50)]
-    [TestCase(3740, 20)]
-    [TestCase(3320, 0)]
+    [TestCase(4100, 100)]
+    [TestCase(3990, 90)]
+    [TestCase(3924, 82)] // read on the headset while G Hub showed 79%
+    [TestCase(3760, 51)]
+    [TestCase(3550, 10)]
+    [TestCase(3300, 0)]
     public void The_curve_interpolates_between_its_calibration_points(int millivolts, int percent)
     {
         Assert.That(LogitechHeadsetProtocol.PercentFromMillivolts(millivolts), Is.EqualTo(percent));

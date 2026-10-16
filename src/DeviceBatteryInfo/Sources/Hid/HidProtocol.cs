@@ -32,6 +32,8 @@ internal sealed class HidChannel(
 
     public int ProductId { get; } = productId;
 
+    public string DevicePath { get; } = devicePath;
+
     // Returns the first response isComplete accepts. Throws when none does, so the poll keeps
     // the last good value.
     public Task<byte[]> ExchangeAsync(
@@ -41,14 +43,14 @@ internal sealed class HidChannel(
     ) =>
         kind == HidReportKind.Feature
             ? transport.ExchangeAsync(
-                devicePath,
+                DevicePath,
                 request,
                 isComplete,
                 budget ?? ReadBudget,
                 cancellationToken
             )
             : transport.ExchangeReportsAsync(
-                devicePath,
+                DevicePath,
                 request,
                 isComplete,
                 budget ?? ReadBudget,
@@ -56,7 +58,7 @@ internal sealed class HidChannel(
             );
 
     public Task<byte[]> GetFeatureAsync(byte reportId, CancellationToken cancellationToken) =>
-        transport.GetFeatureAsync(devicePath, reportId, budget ?? ReadBudget, cancellationToken);
+        transport.GetFeatureAsync(DevicePath, reportId, budget ?? ReadBudget, cancellationToken);
 }
 
 // Subclass it, list the devices and implement ReadAsync. Finding the device is done for you.
