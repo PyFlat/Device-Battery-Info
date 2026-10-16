@@ -14,12 +14,9 @@ internal sealed class LogitechHeadsetProtocol()
 
     private const byte Charging = 0x03;
 
-    // The bottom of the discharge curve; a headset that is off reads below it.
     internal const int OffMillivolts = 3300;
 
-    // Discharge curve sampled from G Hub's own power model for the 0ABA
-    // (pro_x_wireless_headset_battery.xml: voltage against mAh drawn, 1271 mAh in all), highest voltage
-    // first. HeadsetControl's G Pro points, used before, read 3924 mV as 65% where G Hub showed 79%.
+    // Sampled from G Hub's power model for the 0ABA (pro_x_wireless_headset_battery.xml).
     private static readonly (int Millivolts, int Percent)[] Curve =
     [
         (4100, 100),
@@ -61,7 +58,6 @@ internal sealed class LogitechHeadsetProtocol()
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
         [new("G Pro X Wireless", 0x0ABA) { Kind = BatterySourceKind.Headset }];
 
-    // One charge in progress per device path; a reading off the charger ends it.
     private readonly ConcurrentDictionary<string, LogitechHeadsetCharge> _charges = new();
 
     protected override BatteryReading ParseBattery(ReadOnlySpan<byte> report) =>
@@ -78,7 +74,6 @@ internal sealed class LogitechHeadsetProtocol()
         return ParseVoltage(report, _charges.GetOrAdd(channel.DevicePath, _ => new()));
     }
 
-    // Without a charge to follow, a charging headset reads from the rising part of the charge curve.
     internal static BatteryReading ParseVoltage(
         ReadOnlySpan<byte> report,
         LogitechHeadsetCharge? charge = null
@@ -120,14 +115,10 @@ internal sealed class LogitechHeadsetProtocol()
         LogitechHidppProtocol.PercentFromMillivolts(millivolts, Curve);
 }
 
-// The charging voltage reads high, so G Hub has a charge curve of its own (same file as the discharge
-// curve): it rises to about 4275 mV at 87% (constant current), then falls to about 4206 mV while the
-// battery fills to 100% (constant voltage). A voltage alone cannot tell the two apart, so this follows
-// one charge: rising until the voltage has dropped below its peak, falling after that, and never lower
-// than it already read. A plugin restart late in a charge reads the rising part until the next drop.
+// G Hub's charge curve rises to ~4275 mV at 87%, then falls while the battery fills, so one charge is
+// followed past its peak; a voltage alone cannot tell the two parts apart.
 internal sealed class LogitechHeadsetCharge
 {
-    // Highest voltage first, as PercentFromMillivolts expects.
     internal static readonly (int Millivolts, int Percent)[] Rising =
     [
         (4275, 87),
@@ -165,11 +156,10 @@ internal sealed class LogitechHeadsetCharge
         (4219, 97),
         (4212, 98),
         (4206, 100),
-        // Lower still is full too, never the 0 below the end of a curve.
+        // Lower still is full, not the 0 below a curve's end.
         (LogitechHeadsetProtocol.OffMillivolts, 100),
     ];
 
-    // A drop this far below the peak is the turn, not noise between two reads.
     private const int PeakSlack = 5;
 
     private readonly Lock _lock = new();
@@ -181,7 +171,7 @@ internal sealed class LogitechHeadsetCharge
     {
         lock (_lock)
         {
-            // Only the falling part's range can be the turn; lower down the voltage still rises.
+            // Lower down the voltage still rises, so only the falling part's range can be the turn.
             _falling |= _peak >= Falling[^2].Millivolts && millivolts <= _peak - PeakSlack;
             _peak = Math.Max(_peak, millivolts);
 

@@ -77,10 +77,10 @@ public sealed class LogitechHeadsetProtocolTests
             charge.Update(4097),
             charge.Update(4199),
             charge.Update(4275),
-            charge.Update(4273), // noise at the peak, not the turn yet
+            charge.Update(4273),
             charge.Update(4264),
             charge.Update(4241),
-            charge.Update(4245), // a falling voltage that ticks up again reads no lower
+            charge.Update(4245),
             charge.Update(4206),
         ];
 

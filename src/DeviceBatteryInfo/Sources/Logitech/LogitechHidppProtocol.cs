@@ -31,7 +31,6 @@ internal abstract class LogitechHidppProtocol(int usagePage, int usage, byte dev
 
     protected abstract BatteryReading ParseBattery(ReadOnlySpan<byte> report);
 
-    // For a product line that keeps state per device between reads.
     protected virtual BatteryReading ParseBattery(HidChannel channel, ReadOnlySpan<byte> report) =>
         ParseBattery(report);
 
