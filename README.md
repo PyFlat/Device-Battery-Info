@@ -108,6 +108,7 @@ listed here is not supported even if it shares a brand or protocol with one that
 | Logitech | G502 X PLUS          | Mouse      | Receiver or cable | yes       | yes      |                                                                                                  |
 | Logitech | G915                 | Keyboard   | Receiver or cable | approx.   | yes      | Reports a voltage, so the percentage is an estimate. No level while charging.                    |
 | Logitech | G Pro X Wireless     | Headset    | Dongle            | approx.   | yes      | Reports a voltage, so the percentage is an estimate. It reads nothing while the headset is off.  |
+| Logitech | G Pro X 2 Lightspeed | Headset    | Dongle            | yes       | yes      | It reads nothing while the headset is off.                                                       |
 | Corsair  | VOID PRO Wireless    | Headset    | Dongle            | yes       | yes      | It reads nothing while the headset is off.                                                       |
 | Rapoo    | VT3 PRO              | Mouse      | Dongle or cable   | yes       | yes      | On the cable it reports only now and then, so the reading may go stale. No level while charging. |
 | AULA     | F75                  | Keyboard   | 2.4G receiver     | yes       | yes      | No level while the cable is in, only that it charges. Not read in wired mode.                    |
