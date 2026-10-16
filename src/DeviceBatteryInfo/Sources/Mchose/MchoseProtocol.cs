@@ -3,8 +3,7 @@ using DeviceBatteryInfo.Sources.Hid;
 
 namespace DeviceBatteryInfo.Sources.Mchose;
 
-// Report 55 65 01 asks the dongle for the battery; it answers 55 65 with the level in byte 2 (10% steps)
-// and the state in byte 3. It also pushes the same frame on changes, and 55 11 when the headset connects.
+// The dongle also pushes 55 65 on changes, and 55 11 when the headset connects.
 internal sealed class MchoseProtocol()
     : HidProtocol(
         "MCHOSE",
@@ -23,8 +22,7 @@ internal sealed class MchoseProtocol()
 
     private const byte OnBattery = 0x02;
 
-    // The level freezes at its value from when the cable went in, so it says nothing about the charge.
-    // A query answers OnCable both while charging and when full; the pushed frames say Charging.
+    // With the cable in the level freezes, so neither state gives a percent.
     private const byte OnCable = 0x00;
     private const byte Charging = 0x03;
 

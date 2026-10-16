@@ -3,7 +3,6 @@ using DeviceBatteryInfo.Sources.Hid;
 
 namespace DeviceBatteryInfo.Sources.Logitech;
 
-// Devices that report a battery voltage (0x1001) instead of a percentage.
 // Read on a G502 Lightspeed (receiver C539, cable C08D); the G915 (C547, C33E) lists the same feature.
 internal sealed class LogitechVoltageBatteryProtocol() : LogitechHidppProtocol(0xFF00, 0x0002, DeviceIndex)
 {
@@ -67,7 +66,7 @@ internal sealed class LogitechVoltageBatteryProtocol() : LogitechHidppProtocol(0
             );
         }
 
-        // The voltage reads high while charging (87% against G Hub's 82% on a G915), so no percent then.
+        // The voltage reads high while charging, so no percent then.
         return (flags & ChargeStateMask) switch
         {
             0 => new BatteryReading { Status = BatteryStatus.Charging },

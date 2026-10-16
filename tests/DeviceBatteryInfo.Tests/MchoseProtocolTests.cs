@@ -38,7 +38,6 @@ public sealed class MchoseProtocolTests
         }
     }
 
-    // The pushed frame while charging, and the answer to a query with the cable in (charging or full).
     private static IEnumerable<byte[]> CableFrames() => [Charging, OnCable];
 
     [Test]

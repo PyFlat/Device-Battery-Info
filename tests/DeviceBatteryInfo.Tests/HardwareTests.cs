@@ -211,7 +211,6 @@ public sealed class HardwareTests
         }
     }
 
-    // Shows which battery feature (0x1000, 0x1001, 0x1004) a Logitech device has before it gets a protocol.
     [Test]
     public async Task Lists_the_hidpp_features_of_every_logitech_device()
     {
