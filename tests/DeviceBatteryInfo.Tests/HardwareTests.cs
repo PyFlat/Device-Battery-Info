@@ -26,6 +26,7 @@ public sealed class HardwareTests
         new RazerProtocol(),
         new LogitechProtocol(),
         new LogitechHeadsetProtocol(),
+        new LogitechCenturionProtocol(),
         new LogitechVoltageBatteryProtocol(),
         new CorsairProtocol(),
         new RapooProtocol(),
@@ -305,6 +306,88 @@ public sealed class HardwareTests
         return reply[2] == 0xFF
             ? throw new InvalidOperationException($"HID++ error 0x{reply[5]:X2}.")
             : reply;
+    }
+
+    [Test]
+    public async Task Lists_the_centurion_features_of_the_logitech_headset()
+    {
+        var protocol = new LogitechCenturionProtocol();
+        var transport = new HidSharpTransport(Serilog.Core.Logger.None);
+        var candidates = protocol
+            .Devices.SelectMany(d => d.ProductIds)
+            .SelectMany(productId => transport.FindCandidates(protocol.VendorId, productId, interfaceNumber: null, 0))
+            .Where(c =>
+                !c.CouldNotOpen
+                && c.OutputReportLength >= protocol.ReportLength
+                && c.HasUsage(protocol.UsagePage, protocol.Usage)
+            )
+            .ToArray();
+        Assume.That(candidates, Is.Not.Empty, "No Logitech Centurion receiver is connected.");
+
+        foreach (var candidate in candidates)
+        {
+            var subject = $"{candidate.ProductName} ({candidate.ProductId:X4})";
+            var channel = new HidChannel(transport, candidate.Path, candidate.ProductId, protocol.ReportKind);
+            var step = "receiver features";
+            try
+            {
+                var receiver = await CenturionFeaturesAsync(
+                    (index, function, parameters) =>
+                        LogitechCenturionProtocol.DirectAsync(channel, index, function, parameters, CancellationToken.None)
+                );
+                HardwareReport.Line(subject, "receiver: " + string.Join(" ", receiver.Select(f => $"{f:X4}")));
+
+                step = "headset features";
+                var bridge = (byte)Array.IndexOf(receiver, LogitechCenturionProtocol.BridgeFeature);
+                var headset = await CenturionFeaturesAsync(
+                    (index, function, parameters) =>
+                        LogitechCenturionProtocol.BridgeAsync(
+                            channel,
+                            bridge,
+                            index,
+                            function,
+                            parameters,
+                            CancellationToken.None
+                        )
+                );
+                HardwareReport.Line(subject, $"headset via bridge {bridge}: " + string.Join(" ", headset.Select(f => $"{f:X4}")));
+
+                step = "battery";
+                var battery = (byte)Array.IndexOf(headset, LogitechCenturionProtocol.BatteryFeature);
+                var data = await LogitechCenturionProtocol.BridgeAsync(
+                    channel,
+                    bridge,
+                    battery,
+                    0x00,
+                    [],
+                    CancellationToken.None
+                );
+                var reading = LogitechCenturionProtocol.ParseBattery(data);
+                HardwareReport.Line(
+                    $"{subject} {DateTime.Now:HH:mm:ss}",
+                    $"battery {string.Join(" ", data.Take(8).Select(b => b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)))}"
+                        + $" = {reading.Percent}% {reading.Status}"
+                );
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                HardwareReport.Line(subject, $"stopped at {step}: {exception.Message}");
+            }
+        }
+    }
+
+    private static async Task<ushort[]> CenturionFeaturesAsync(Func<byte, byte, byte[], Task<byte[]>> call)
+    {
+        var featureSet = LogitechCenturionProtocol.ParseFeatureIndex(await call(0x00, 0x00, [0x00, 0x01]));
+        var count = (await call(featureSet, 0x00, []))[0];
+        var features = new ushort[count];
+        for (var n = 0; n < count; n++)
+        {
+            var data = await call(featureSet, 0x10, [(byte)n]);
+            features[n] = (ushort)(data[1] << 8 | data[2]);
+        }
+
+        return features;
     }
 
     // For calibrating the 0x1001 curve against G Hub: the raw voltage behind the percentage.
