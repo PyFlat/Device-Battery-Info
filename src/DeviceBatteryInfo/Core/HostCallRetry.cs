@@ -1,3 +1,5 @@
+using MacroDeck.Sdk.Ui;
+
 namespace DeviceBatteryInfo.Core;
 
 // The host throttles all of a plugin's callbacks together, adb included, so any call can be refused
@@ -25,9 +27,12 @@ internal static class HostCallRetry
 
     // HostInvocationException is internal to the hosting package, so it is matched by name.
     private static bool IsTransient(Exception exception) =>
-        exception.GetType().Name == "HostInvocationException"
-        && (
-            exception.Message.Contains("too quickly", StringComparison.OrdinalIgnoreCase)
-            || exception.Message.Contains("connection", StringComparison.OrdinalIgnoreCase)
+        exception is UiResourceException { ErrorCode: UiResourceErrorCode.RateLimited }
+        || (
+            exception.GetType().Name == "HostInvocationException"
+            && (
+                exception.Message.Contains("too quickly", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("connection", StringComparison.OrdinalIgnoreCase)
+            )
         );
 }

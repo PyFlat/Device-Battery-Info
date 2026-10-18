@@ -399,9 +399,9 @@ internal static class BatteryWidgetView
         var nameInside = innerName is not null;
         var face = new List<UiElement>
         {
-            Glyph(
+            DeviceIcon(
                 "glyph",
-                DeviceGlyphs.For(row.Kind),
+                row,
                 color,
                 RingPart(
                     diameter,
@@ -497,6 +497,42 @@ internal static class BatteryWidgetView
     }
 
     private static UiModifier Glyph(string key, string path, string color, Func<UiLength> edge) =>
+        Square(
+            key,
+            edge,
+            new UiShape
+            {
+                Key = key + "-shape",
+                Shape = UiComponentShapes.Path,
+                Path = path,
+                Color = color,
+            }
+        );
+
+    private static UiModifier DeviceIcon(
+        string key,
+        BatteryWidgetRow row,
+        string color,
+        Func<UiLength> edge
+    ) =>
+        row.Icon is { } icon
+            ? Square(
+                key,
+                edge,
+                new UiImage
+                {
+                    Key = key + "-image",
+                    Source = UiValue.Of(icon),
+                    Size = UiSize.From(() => FillBox(edge())),
+                }
+            )
+            : Glyph(key, DeviceGlyphs.For(row.Kind), color, edge);
+
+    // An unsized image draws at its pixel size.
+    private static UiLength FillBox(UiLength edge) =>
+        edge.ParentFraction is null ? edge : UiLength.OfParent(1, edge.Basis);
+
+    private static UiModifier Square(string key, Func<UiLength> edge, UiElement child) =>
         new()
         {
             Key = key,
@@ -506,13 +542,7 @@ internal static class BatteryWidgetView
                 var length = edge();
                 return new UiFrame { Width = length, Height = length };
             }),
-            Child = new UiShape
-            {
-                Key = key + "-shape",
-                Shape = UiComponentShapes.Path,
-                Path = path,
-                Color = color,
-            },
+            Child = child,
         };
 
     // Fractions of the view basis.
@@ -596,7 +626,7 @@ internal static class BatteryWidgetView
 
         var line = new List<UiElement>
         {
-            Glyph("glyph", DeviceGlyphs.For(row.Kind), color, () => UiLength.OfBasis(ListGlyph)),
+            DeviceIcon("glyph", row, color, () => UiLength.OfBasis(ListGlyph)),
             new UiStack
             {
                 Key = "namegroup",

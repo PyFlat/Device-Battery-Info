@@ -1,12 +1,23 @@
 using System.Globalization;
+using System.Text.Json;
 using DeviceBatteryInfo.Core;
+using MacroDeck.Localization;
 using MacroDeck.Ui.Config;
+using MacroDeck.Ui.Model.Resources;
 
 namespace DeviceBatteryInfo.Ui;
 
 internal sealed record BatteryWidgetModel(
     IReadOnlyList<BatteryWidgetRow> Rows,
     BatteryWidgetOptions Options
+);
+
+// IconKey is the row id: a source id may hold a colon, which no input key takes.
+internal sealed record WidgetDevice(
+    string SourceId,
+    string IconKey,
+    LocalizedText Label,
+    bool IsOwn
 );
 
 internal sealed record BatteryWidgetRow(
@@ -18,7 +29,8 @@ internal sealed record BatteryWidgetRow(
     bool Stale,
     string? TimeToFull,
     string? Trend = null,
-    BatterySourceKind Kind = BatterySourceKind.Other
+    BatterySourceKind Kind = BatterySourceKind.Other,
+    UiResource? Icon = null
 )
 {
     // Apple's system colours.
@@ -200,9 +212,52 @@ internal sealed record BatteryWidgetOptions(
     BatteryNamePosition NamePosition = BatteryNamePosition.Below,
     string RingColor = BatteryWidgetRow.White,
     bool LowInRed = true,
-    UiThresholds? Thresholds = null
+    UiThresholds? Thresholds = null,
+    IReadOnlyDictionary<string, Guid>? Icons = null
 )
 {
+    public const string IconPackType = "icon-pack";
+
+    public static IReadOnlyDictionary<string, Guid> ParseIcons(JsonElement icons)
+    {
+        var parsed = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        if (icons.ValueKind != JsonValueKind.Object)
+        {
+            return parsed;
+        }
+
+        foreach (var entry in icons.EnumerateObject())
+        {
+            if (IconId(entry.Value) is { } id)
+            {
+                parsed[entry.Name] = id;
+            }
+        }
+
+        return parsed;
+    }
+
+    // The picker writes a bare id instead of a reference over a stored string.
+    public static Guid? IconId(JsonElement value)
+    {
+        var reference = value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Object
+                when (
+                    !value.TryGetProperty("type", out var type)
+                    || type.ValueEquals(IconPackType)
+                )
+                    && value.TryGetProperty("reference", out var inner)
+                    && inner.ValueKind == JsonValueKind.String => inner.GetString(),
+            _ => null,
+        };
+        return Guid.TryParse(reference, out var id) ? id : null;
+    }
+
+    public Guid? IconFor(string rowId) =>
+        Icons is not null && Icons.TryGetValue(rowId, out var id) ? id : null;
+
     private const int OrangeFrom = 1;
     private const int YellowFrom = 41;
     private const int GreenFrom = 61;

@@ -114,7 +114,7 @@ public sealed class BatteryWidgetViewTests
     [TestCase(BatteryWidgetTypes.TileId)]
     public void Config_view_builds(string widgetId)
     {
-        UiOption[] devices = [UiOption.Of("system") with { Label = "This PC" }];
+        WidgetDevice[] devices = [new("system", "system", "This PC", IsOwn: true)];
 
         Assert.DoesNotThrow(
             () =>

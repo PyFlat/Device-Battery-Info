@@ -101,6 +101,8 @@ tests/DeviceBatteryInfo.Tests/
                                   out-of-reach devices, the kind mapping
   ExternalBatteryDevicesTests.cs  other providers' devices in the picker and as widget rows, our own
                                   filtered out, a live widget session, the reverse kind and state mapping
+  WidgetIconTests.cs              per-widget icons: stored shapes, the image in place of the glyph, the
+                                  pickers, a live session loading an icon from the fake icon store
   HidTransportPlatformTests.cs    macOS entry ids and descriptors (a captured G Pro X Wireless one), Windows
                                   interface and unit keys, the bounded exchange on a fake channel,
                                   vendor-collection matching
@@ -150,7 +152,7 @@ Design knowledge that is not obvious from the code alone:
   which conformance does not catch, so the `BatteryWidgetViewTests` build each tree through a real
   `UiView`. A widget `config` surface is served by this plugin's own `IUiProvider.CreateSessionAsync`
   (kind `"config"`, `entryPoint == "widget-config"`), not by the hosting config-flow path.
-  `BatteryWidgetConfigView` follows the host's own Action Button form: `UiTabs` (Devices, and Appearance
+  `BatteryWidgetConfigView` follows the host's own Action Button form: `UiTabs` (Devices, Icons, and Appearance
   with the display switches under a "Show" heading) and `Segmented` choices whose `UiOption.Icon` names a `UiIcons` value for short icon choices.
   The properties pane beside the actions editor is narrow (about 280 px): a switch in a row wraps its
   label and stacks it above the switch, and one whose row partner is hidden jumps to the right, so every
@@ -164,8 +166,8 @@ Design knowledge that is not obvious from the code alone:
   (its box) and `Thickness` (its track), texts beside a `Fill` sibling need a `MainSize`, and
   `Padding` is the corner-radius safe area (`BatteryWidgetView.SafeArea`, radius from the
   `cornerRadius` surface attribute). Plugins ship no images: device icons are `UiShape` paths in
-  `DeviceGlyphs`, drawn in the unit square the renderer scales to the shape's box (so give the box a
-  square `UiFrame`), absolute `M L H V C Q A Z` only, filled nonzero - a solid part clockwise, a
+  `DeviceGlyphs` (unless the user picks their own, see the per-widget icons below), drawn in the unit
+  square the renderer scales to the shape's box (so give the box a square `UiFrame`), absolute `M L H V C Q A Z` only, filled nonzero - a solid part clockwise, a
   cut-out counter-clockwise, and a cut-out never where two solid parts overlap (the winding sums to
   1 there and it disappears). `BatteryWidgetViewTests` checks every path against the renderer's
   grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
@@ -225,6 +227,17 @@ Design knowledge that is not obvious from the code alone:
   name and caption have no `MinSize`. It switches the whole list, not each row, because an unsized
   first-fit takes its last layout's size and every row would be as tall as a stacked one. A progress bar's `StartColor`
   and `EndColor` are always the same hex - the renderer always paints a `linear-gradient`.
+- **A widget can replace any device's glyph with an icon from the user's icon packs.** The Icons tab
+  has a `UiObjectInput` keyed `icons` holding a `UiRepeat` of one `UiIconReferenceInput` per device the
+  widget shows, following the `sourceIds` state live (empty means this plugin's devices, as in the
+  widget); a repeat opens no id scope. Each picker is keyed by row id (`WidgetDevice.IconKey`: the slot
+  id, or `ExternalBatteryDevices.RowKey` for another provider's device, because an input key takes no
+  colon), and every device keeps its state, so a deselected device keeps its icon. The data holds `icons.<row id> = { "type": "icon-pack", "reference": "<icon id>" }`;
+  a bare id is accepted too. Each widget session resolves the ids through `UiResources.GetIconAsync` in
+  the background (per session, because a replaced icon keeps its id and gets a new hash) and
+  re-renders; a missing icon is logged and the glyph stays. The image is untinted and needs an explicit
+  `Size` (`OfParent(1)` inside the glyph's box), or the reader draws it at its pixel size. The config
+  flow cannot offer a per-device default yet: its dialog renders an `ActionParameter.Icon` as a text box.
 - **A short press refreshes until the user sets their own Short Press action.** Both widget types set
   `SupportsFlows` (Macro Deck PR 960), so the host runs the actions the user bound to the widget, like a
   built-in one, and `DefaultShortPressAction` (PR 1111, host and SDK beta.15) names this plugin's own

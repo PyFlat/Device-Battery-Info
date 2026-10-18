@@ -16,7 +16,7 @@ namespace DeviceBatteryInfo.Tests;
 [TestFixture]
 public sealed class ExternalBatteryDevicesTests
 {
-    private const string PhoneId = "com.example.phones:pixel";
+    internal const string PhoneId = "com.example.phones:pixel";
     private static readonly Guid OwnEntry = Guid.Parse("5d3c8f2a-1b7e-4c90-a6d4-93e0f1b2c7a8");
 
     private static PluginTestHarness CreateHarness() =>
@@ -59,7 +59,7 @@ public sealed class ExternalBatteryDevicesTests
             UpdatedAt = DateTimeOffset.UnixEpoch,
         };
 
-    private static async Task<PluginTestHarness> InitializedWithCatalogAsync()
+    internal static async Task<PluginTestHarness> InitializedWithCatalogAsync()
     {
         var harness = CreateHarness();
         await harness.InitializeIntegrationsAsync();
@@ -90,7 +90,7 @@ public sealed class ExternalBatteryDevicesTests
         return harness;
     }
 
-    private static BatteryIntegration Integration(PluginTestHarness harness) =>
+    internal static BatteryIntegration Integration(PluginTestHarness harness) =>
         harness.Services.GetRequiredService<BatteryIntegration>();
 
     [Test]
@@ -98,11 +98,11 @@ public sealed class ExternalBatteryDevicesTests
     {
         await using var harness = await InitializedWithCatalogAsync();
 
-        var choices = Integration(harness).DeviceChoices();
+        var choices = Integration(harness).WidgetDevices();
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(choices.Select(c => c.Value), Is.EqualTo(new[] { "mouse", PhoneId }));
+            Assert.That(choices.Select(c => c.SourceId), Is.EqualTo(new[] { "mouse", PhoneId }));
             Assert.That(
                 choices[1].Label.ToString(),
                 Does.Contain("Widgets.Config.Devices.External")

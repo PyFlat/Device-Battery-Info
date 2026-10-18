@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using DeviceBatteryInfo.Core;
 using MacroDeck.Localization;
 using MacroDeck.Ui.Components;
@@ -14,7 +15,7 @@ internal static class BatteryWidgetConfigView
     public static UiElement Build(
         string widgetLocalId,
         BatteryWidgetOptions current,
-        IReadOnlyList<UiOption> devices,
+        IReadOnlyList<WidgetDevice> devices,
         JsonElement data = default
     )
     {
@@ -80,7 +81,9 @@ internal static class BatteryWidgetConfigView
             {
                 Key = "sourceIds",
                 Label = Strings.Widgets.Config.Devices.Label(),
-                Options = UiValue.Of(devices),
+                Options = UiValue.Of<IReadOnlyList<UiOption>>(
+                    devices.Select(d => UiOption.Of(d.SourceId) with { Label = d.Label }).ToArray()
+                ),
                 Binding = Bind.To(sourceIds),
                 Reorderable = UiValue.Of(true),
             }
@@ -343,6 +346,11 @@ internal static class BatteryWidgetConfigView
                         Children =
                         [
                             Tab("content-tab", Strings.Widgets.Config.Tabs.Devices(), content),
+                            Tab(
+                                "icons-tab",
+                                Strings.Widgets.Config.Tabs.Icons(),
+                                [IconsField(devices, current, sourceIds)]
+                            ),
                             Tab("appearance-tab", Strings.Widgets.Config.Tabs.Appearance(), appearance),
                         ],
                     },
@@ -367,6 +375,85 @@ internal static class BatteryWidgetConfigView
     }
 
     private static readonly JsonElement EmptyFlows = JsonDocument.Parse("[]").RootElement.Clone();
+
+    // Null is "no icon picked".
+    private static UiIconReference IconReference(Guid? id) =>
+        id is { } value
+            ? new UiIconReference(BatteryWidgetOptions.IconPackType, value.ToString())
+            : null!;
+
+    // Follows the device selection; an empty one shows this plugin's devices, like the widget.
+    private static UiObjectInput IconsField(
+        IReadOnlyList<WidgetDevice> devices,
+        BatteryWidgetOptions current,
+        UiState<IReadOnlyList<string>> sourceIds
+    )
+    {
+        var states = devices.ToDictionary(
+            device => device.IconKey,
+            device => new UiState<UiIconReference>(IconReference(current.IconFor(device.IconKey))),
+            StringComparer.Ordinal
+        );
+        var bySource = devices.ToDictionary(device => device.SourceId, StringComparer.Ordinal);
+
+        IReadOnlyList<WidgetDevice> Shown() =>
+            sourceIds.Value.Count == 0
+                ? devices.Where(device => device.IsOwn).ToArray()
+                : sourceIds
+                    .Value.Select(id => bySource.GetValueOrDefault(id))
+                    .OfType<WidgetDevice>()
+                    .ToArray();
+
+        JsonElement Compose()
+        {
+            var icons = new JsonObject();
+            foreach (var (key, state) in states)
+            {
+                if (state.Value is { } reference)
+                {
+                    icons[key] = new JsonObject
+                    {
+                        ["type"] = reference.Type,
+                        ["reference"] = reference.Reference,
+                    };
+                }
+            }
+
+            return JsonSerializer.SerializeToElement(icons);
+        }
+
+        void Apply(JsonElement value)
+        {
+            var parsed = BatteryWidgetOptions.ParseIcons(value);
+            foreach (var (key, state) in states)
+            {
+                state.Value = IconReference(parsed.TryGetValue(key, out var id) ? id : null);
+            }
+        }
+
+        return new UiObjectInput
+        {
+            Key = "icons",
+            Description = Strings.Widgets.Config.Icons.Description(),
+            Binding = Bind.Custom(Compose, Apply),
+            Children =
+            [
+                new UiRepeat<WidgetDevice>
+                {
+                    Key = "icon-items",
+                    Items = UiValue.From(Shown),
+                    KeySelector = device => device.IconKey,
+                    Template = (device, _) =>
+                        new UiIconReferenceInput
+                        {
+                            Key = device.IconKey,
+                            Label = device.Label,
+                            Binding = Bind.To(states[device.IconKey]),
+                        },
+                },
+            ],
+        };
+    }
 
     private static UiTab Tab(string key, UiText label, IReadOnlyList<UiElement> children) =>
         new()
