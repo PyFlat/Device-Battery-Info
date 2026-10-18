@@ -125,6 +125,9 @@
     <data name="Widgets.Config.Tabs.Devices" xml:space="preserve">
         <value>Devices</value>
     </data>
+    <data name="Widgets.Config.Tabs.Icons" xml:space="preserve">
+        <value>Icons</value>
+    </data>
     <data name="Widgets.Config.Tabs.Appearance" xml:space="preserve">
         <value>Appearance</value>
     </data>
@@ -137,6 +140,9 @@
     <data name="Widgets.Config.Devices.External" xml:space="preserve">
         <value>{device} - {provider}</value>
         <comment>A device another plugin reports to Macro Deck, followed by that plugin's name.</comment>
+    </data>
+    <data name="Widgets.Config.Icons.Description" xml:space="preserve">
+        <value>Optional. Pick an icon from your icon packs to show instead of the built-in symbol.</value>
     </data>
     <data name="Widgets.Config.Title.Label" xml:space="preserve">
         <value>Heading</value>

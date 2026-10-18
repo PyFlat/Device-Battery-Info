@@ -150,6 +150,11 @@ internal static class BatteryWidgetTypes
               "default": "top",
               "description": "Where the list layout places its rows when they do not fill the widget."
             },
+            "icons": {
+              "type": "object",
+              "additionalProperties": { "type": ["object", "string", "null"] },
+              "description": "Per-device icons that replace the built-in symbol, keyed by device id (a hashed key for other plugins' devices): an icon-pack reference { \"type\": \"icon-pack\", \"reference\": \"<icon id>\" } or the bare icon id. The icon is drawn in its own colours."
+            },
             "flows": {
               "type": "array",
               "description": "The actions a press runs, edited in the widget's action list."

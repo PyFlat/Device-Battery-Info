@@ -6,7 +6,7 @@ using MacroDeck.Sdk.Batteries;
 using MacroDeck.Sdk.Ui;
 using MacroDeck.Sdk.Widgets;
 using MacroDeck.Ui.Config;
-using MacroDeck.Ui.Config.Options;
+using MacroDeck.Ui.Model.Resources;
 using MacroDeck.Ui.Model.Surfaces;
 using MacroDeck.Ui.Runtime;
 
@@ -105,7 +105,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
 
         var data = AttributeJson(surface, UiWidgetSurfaceAttributes.Data);
         var options = ParseOptions(data);
-        BatteryWidgetModel Compute() => BuildModel(options);
+        IReadOnlyDictionary<Guid, UiResource>? icons = null;
+        BatteryWidgetModel Compute() => BuildModel(options, icons);
 
         var initial = Compute();
         _logger.Information(
@@ -127,10 +128,36 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
 
         _polling.RequestRefresh();
 
+        var closing = new CancellationTokenSource();
+        if (options.Icons is { Count: > 0 })
+        {
+            _ = LoadIconsAsync();
+        }
+
+        async Task LoadIconsAsync()
+        {
+            try
+            {
+                var token = closing.Token;
+                icons = await ResolveIconsAsync(options, token);
+                if (!token.IsCancellationRequested)
+                {
+                    Refresh();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception exception)
+            {
+                _logger.Warning(exception, "Loading the icons of a battery widget failed.");
+            }
+        }
+
         return new UiViewSession(
             view,
             onDispose: () =>
             {
+                closing.Cancel();
+                closing.Dispose();
                 _registry.Changed -= OnRegistryChanged;
                 _catalog.Changed -= OnCatalogChanged;
                 BatteryCatalogChanged -= OnCatalogChanged;
@@ -158,12 +185,15 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         var options = ParseOptions(data);
         var view = new UiView(
             surface,
-            BatteryWidgetConfigView.Build(localId, options, DeviceChoices(), data ?? default)
+            BatteryWidgetConfigView.Build(localId, options, WidgetDevices(), data ?? default)
         );
         return new UiViewSession(view);
     }
 
-    internal BatteryWidgetModel BuildModel(BatteryWidgetOptions options)
+    internal BatteryWidgetModel BuildModel(
+        BatteryWidgetOptions options,
+        IReadOnlyDictionary<Guid, UiResource>? icons = null
+    )
     {
         var own = CurrentSlots();
         IReadOnlyList<BatteryWidgetRow> rows;
@@ -185,7 +215,51 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 .ToArray();
         }
 
+        if (icons is { Count: > 0 })
+        {
+            rows = rows.Select(row =>
+                    options.IconFor(row.Id) is { } id && icons.TryGetValue(id, out var icon)
+                        ? row with { Icon = icon }
+                        : row
+                )
+                .ToArray();
+        }
+
         return new BatteryWidgetModel(options.Order(rows), options);
+    }
+
+    // Per session: a replaced icon keeps its id but gets a new hash.
+    internal async Task<IReadOnlyDictionary<Guid, UiResource>> ResolveIconsAsync(
+        BatteryWidgetOptions options,
+        CancellationToken cancellationToken
+    )
+    {
+        var resolved = new Dictionary<Guid, UiResource>();
+        if (_context?.UiResources is not { } resources || options.Icons is not { Count: > 0 } icons)
+        {
+            return resolved;
+        }
+
+        foreach (var id in icons.Values.Distinct())
+        {
+            try
+            {
+                resolved[id] = await HostCallRetry.RunAsync(
+                    () => resources.GetIconAsync(id, cancellationToken),
+                    cancellationToken
+                );
+            }
+            catch (UiResourceException exception)
+            {
+                _logger.Warning(
+                    "Could not load icon {IconId} for a battery widget ({ErrorCode}).",
+                    id,
+                    exception.ErrorCode
+                );
+            }
+        }
+
+        return resolved;
     }
 
     private BatteryWidgetRow OwnRow(BatterySlot slot)
@@ -233,20 +307,17 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         );
     }
 
-    internal UiOption[] DeviceChoices() =>
+    internal WidgetDevice[] WidgetDevices() =>
         [
             .. CurrentSlots()
-                .Select(slot => UiOption.Of(slot.Id) with { Label = slot.DisplayName }),
+                .Select(slot => new WidgetDevice(slot.Id, slot.Id, slot.DisplayName, IsOwn: true)),
             .. ExternalDevices()
-                .Select(device =>
-                    UiOption.Of(device.Id) with
-                    {
-                        Label = Strings.Widgets.Config.Devices.External(
-                            device.Name,
-                            device.ProviderName
-                        ),
-                    }
-                ),
+                .Select(device => new WidgetDevice(
+                    device.Id,
+                    ExternalBatteryDevices.RowKey(device.Id),
+                    Strings.Widgets.Config.Devices.External(device.Name, device.ProviderName),
+                    IsOwn: false
+                )),
         ];
 
     private string? LocalWidgetId(string widgetTypeAttribute)
@@ -357,6 +428,10 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 ? parsedThresholds
                 : null;
 
+        var icons = obj.TryGetProperty("icons", out var iconsValue)
+            ? BatteryWidgetOptions.ParseIcons(iconsValue)
+            : null;
+
         var appearance = UiWidgetAppearance.Read(obj);
 
         return new BatteryWidgetOptions(
@@ -380,7 +455,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             namePosition,
             ringColor,
             Flag("lowInRed", true),
-            thresholds
+            thresholds,
+            icons
         );
     }
 

@@ -41,7 +41,9 @@ internal static class DeviceGlyphs
     private static string Tablet() =>
         new GlyphPath()
             .RoundedRect(0.14, 0.1, 0.72, 0.8, 0.09)
-            .RoundedRect(0.2, 0.16, 0.6, 0.68, 0.04, hole: true)
+            .RoundedRect(0.2, 0.17, 0.6, 0.66, 0.04, hole: true)
+            .Circle(0.5, 0.135, 0.017, hole: true)
+            .RoundedRect(0.4, 0.765, 0.2, 0.035, 0.0175)
             .ToString();
 
     private static string Laptop() =>
