@@ -1,6 +1,7 @@
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Sources;
+using DeviceBatteryInfo.Variables;
 using MacroDeck.Plugin.Testing;
 using MacroDeck.Sdk;
 using MacroDeck.Sdk.Variables;
@@ -118,11 +119,11 @@ public sealed class BatteryIntegrationTests
         var describeJson = describe.Data?.ToString() ?? string.Empty;
         Assert.That(describeJson, Does.Not.Contain("battery_system_percent"));
 
-        var discover = await harness.Variables.DiscoverAsync(pageSize: 200);
+        var discover = await harness.Variables.DiscoverAsync(search: "percent", pageSize: 200);
         Assert.That(discover.Succeeded, Is.True, discover.Error?.ToString() ?? "none");
         var discoverJson = discover.Data?.ToString() ?? string.Empty;
         Assert.That(discoverJson, Does.Contain("system-percent"));
-        Assert.That(discoverJson, Does.Contain("headset-charging"));
+        Assert.That(discoverJson, Does.Contain("headset-percent"));
 
         var resolve = await harness.Variables.ResolveAsync("system-percent");
         Assert.That(resolve.Succeeded, Is.True, resolve.Error?.ToString() ?? "none");
@@ -172,7 +173,7 @@ public sealed class BatteryIntegrationTests
         }
 
         var page = await integration.DiscoverAsync(
-            new VariableCatalogQuery { PageSize = 3 }
+            new VariableCatalogQuery { ParentId = "devices/system", PageSize = 3 }
         );
         using (Assert.EnterMultipleScope())
         {
@@ -187,6 +188,7 @@ public sealed class BatteryIntegrationTests
         var next = await integration.DiscoverAsync(
             new VariableCatalogQuery
             {
+                ParentId = "devices/system",
                 PageSize = 3,
                 ContinuationToken = page.ContinuationToken,
             }
@@ -195,6 +197,202 @@ public sealed class BatteryIntegrationTests
             next.Items.Select(i => i.Id),
             Is.Not.EquivalentTo(page.Items.Select(i => i.Id))
         );
+    }
+
+    private static BatteryIntegration SeedPhoneAndLaptop(PluginTestHarness harness)
+    {
+        harness
+            .Services.GetRequiredService<DeviceCatalog>()
+            .Set(
+                [
+                    new BatterySlot(
+                        "phone",
+                        "Pixel 8",
+                        BatterySourceKind.Phone,
+                        DeviceType.AdbPhone,
+                        AdbAddress: "1.2.3.4:5555"
+                    ),
+                    new BatterySlot(
+                        "laptop",
+                        "Work Laptop",
+                        BatterySourceKind.System,
+                        DeviceType.System
+                    ),
+                ]
+            );
+
+        return harness.Services.GetRequiredService<BatteryIntegration>();
+    }
+
+    [Test]
+    public async Task The_top_level_is_one_folder_per_device()
+    {
+        await using var harness = CreateHarness();
+        await harness.InitializeIntegrationsAsync();
+        var integration = SeedPhoneAndLaptop(harness);
+
+        var page = await integration.DiscoverAsync(new VariableCatalogQuery());
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(
+                page.Items.Select(i => i.Id),
+                Is.EqualTo(new[] { "devices/phone", "devices/laptop" })
+            );
+            Assert.That(
+                page.Items.Select(i => i.DisplayName.Literal),
+                Is.EqualTo(new[] { "Pixel 8", "Work Laptop" })
+            );
+            Assert.That(page.Items.Select(i => i.IsContainer), Is.All.True);
+            Assert.That(page.Items.Select(i => i.IsBindable), Is.All.False);
+            Assert.That(page.ContinuationToken, Is.Null);
+        }
+    }
+
+    [Test]
+    public async Task A_folder_holds_exactly_its_devices_variables()
+    {
+        await using var harness = CreateHarness();
+        await harness.InitializeIntegrationsAsync();
+        var integration = SeedPhoneAndLaptop(harness);
+
+        var page = await integration.DiscoverAsync(
+            new VariableCatalogQuery { ParentId = "devices/phone" }
+        );
+        var unknown = await integration.DiscoverAsync(
+            new VariableCatalogQuery { ParentId = "devices/tablet" }
+        );
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(page.Items, Has.Count.EqualTo(BatteryVariableCatalog.FieldsPerDevice));
+            Assert.That(page.Items.Select(i => i.Id), Is.All.StartsWith("phone-"));
+            Assert.That(page.Items.Select(i => i.ParentId), Is.All.EqualTo("devices/phone"));
+            Assert.That(page.Items.Select(i => i.IsContainer), Is.All.False);
+            Assert.That(unknown.Items, Is.Empty);
+        }
+    }
+
+    [TestCase("phone percent")]
+    [TestCase("PIXEL percent")]
+    [TestCase("battery_phone_percent")]
+    [TestCase("battery.phone.percent")]
+    public async Task A_search_lists_the_matching_variables_across_devices(string search)
+    {
+        await using var harness = CreateHarness();
+        await harness.InitializeIntegrationsAsync();
+        var integration = SeedPhoneAndLaptop(harness);
+
+        var page = await integration.DiscoverAsync(new VariableCatalogQuery { Search = search });
+
+        Assert.That(page.Items.Select(i => i.Id), Is.EqualTo(new[] { "phone-percent" }));
+    }
+
+    [Test]
+    public async Task A_search_never_lists_folders_or_another_devices_variables()
+    {
+        await using var harness = CreateHarness();
+        await harness.InitializeIntegrationsAsync();
+        var integration = SeedPhoneAndLaptop(harness);
+
+        var percents = await integration.DiscoverAsync(
+            new VariableCatalogQuery { Search = "percent" }
+        );
+        var laptop = await integration.DiscoverAsync(
+            new VariableCatalogQuery { Search = "work charging" }
+        );
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(
+                percents.Items.Select(i => i.Id),
+                Is.EqualTo(new[] { "phone-percent", "laptop-percent" })
+            );
+            Assert.That(percents.Items.Select(i => i.IsContainer), Is.All.False);
+            Assert.That(laptop.Items.Select(i => i.Id), Is.EqualTo(new[] { "laptop-charging" }));
+        }
+    }
+
+    [Test]
+    public async Task A_folder_id_resolves_to_its_folder_and_never_to_a_variable()
+    {
+        await using var harness = CreateHarness();
+        await harness.InitializeIntegrationsAsync();
+        // A slot id ending in a field suffix, so the folder id would parse as that field without the guard.
+        harness
+            .Services.GetRequiredService<DeviceCatalog>()
+            .Set(
+                [new BatterySlot("pen-online", "Pen", BatterySourceKind.Pen, DeviceType.System)]
+            );
+        var integration = harness.Services.GetRequiredService<BatteryIntegration>();
+
+        var folder = await integration.ResolveAsync("devices/pen-online");
+        var variable = await integration.ResolveAsync("pen-online-online");
+        var reading = await integration.ReadAsync("devices/pen-online");
+        var subscribed = await integration.SubscribeAsync(["devices/pen-online"]);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(folder?.IsContainer, Is.True);
+            Assert.That(folder?.IsBindable, Is.False);
+            Assert.That(variable?.IsContainer, Is.False);
+            Assert.That(
+                BatteryVariableCatalog.TryResolve("devices/pen-online", out _, out _),
+                Is.False
+            );
+            Assert.That(reading, Is.EqualTo(VariableReading.Unavailable));
+            Assert.That(
+                subscribed.Single(),
+                Is.EqualTo(VariableValue.Unavailable("devices/pen-online"))
+            );
+        }
+    }
+
+    [Test]
+    public void Variable_ids_and_names_of_a_slot_stay_as_released()
+    {
+        var slot = new BatterySlot(
+            "gaming-headset",
+            "Gaming Headset",
+            BatterySourceKind.Headset,
+            DeviceType.Bluetooth
+        );
+
+        var variables = BatteryVariableCatalog.ForDevice(slot);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(
+                variables.Select(v => v.Id),
+                Is.EqualTo(
+                    new[]
+                    {
+                        "gaming-headset-percent",
+                        "gaming-headset-status",
+                        "gaming-headset-charging",
+                        "gaming-headset-online",
+                        "gaming-headset-time-to-full",
+                        "gaming-headset-trend",
+                        "gaming-headset-trend-rate",
+                    }
+                )
+            );
+            Assert.That(
+                variables.Select(v => v.Name),
+                Is.EqualTo(
+                    new[]
+                    {
+                        "battery_gaming_headset_percent",
+                        "battery_gaming_headset_status",
+                        "battery_gaming_headset_charging",
+                        "battery_gaming_headset_online",
+                        "battery_gaming_headset_time_to_full",
+                        "battery_gaming_headset_trend",
+                        "battery_gaming_headset_trend_rate",
+                    }
+                )
+            );
+        }
     }
 
     private sealed class SeedSource(string id, string name) : IBatterySource

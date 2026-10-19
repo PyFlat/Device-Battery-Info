@@ -41,6 +41,10 @@ Widgets update live between polls. The battery trend is shown as a signed change
 covers, for example `-13%/1h` while discharging or `+28%/30m` while charging. It needs a couple of
 minutes of history and starts over whenever the plugin restarts.
 
+**Variables** for every device you add: `battery_<device>_percent`, `_status`, `_charging`, `_online`,
+`_time_to_full`, `_trend` and `_trend_rate`. Macro Deck's variable list shows them in one folder per
+device, and its search box finds them across devices by name and device name (`phone percent`, say).
+
 **Events** you can use in flows: `charging-started`, `charging-stopped` and `battery-low`.
 
 **A "Refresh battery levels" action** that forces an immediate poll.
