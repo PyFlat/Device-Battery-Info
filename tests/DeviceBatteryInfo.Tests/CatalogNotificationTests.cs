@@ -55,6 +55,58 @@ public sealed class CatalogNotificationTests
         await Task.Delay(200);
     }
 
+    [Test]
+    public async Task The_variable_catalog_reloads_only_when_the_devices_change()
+    {
+        var integration = Build(out var catalog, out var registry);
+        var sink = new FakeVariableSink();
+        await integration.InitializeAsync(new FakeIntegrationContext());
+
+        await integration.OnAttachedAsync(sink);
+        Assert.That(sink.Invalidations, Is.EqualTo(1), "attaching reloads the host's cached catalog");
+
+        catalog.Set(
+            [new BatterySlot("laptop", "Laptop", BatterySourceKind.System, DeviceType.System)]
+        );
+        Assert.That(sink.Invalidations, Is.EqualTo(2), "a device was added");
+
+        catalog.Set(
+            [new BatterySlot("laptop", "Laptop", BatterySourceKind.System, DeviceType.System)]
+        );
+        registry.Update(
+            new StubSource("laptop", "Laptop"),
+            BatteryReading.FromPercent(50, BatteryStatus.Discharging)
+        );
+        registry.Update(
+            new StubSource("laptop", "Laptop"),
+            BatteryReading.FromPercent(49, BatteryStatus.Discharging)
+        );
+        await integration.InitializeAsync(new FakeIntegrationContext());
+        Assert.That(
+            sink.Invalidations,
+            Is.EqualTo(2),
+            "readings and re-initializing change no device"
+        );
+
+        catalog.Set(
+            [
+                new BatterySlot(
+                    "laptop",
+                    "Work Laptop",
+                    BatterySourceKind.System,
+                    DeviceType.System
+                ),
+            ]
+        );
+        Assert.That(sink.Invalidations, Is.EqualTo(3), "a device was renamed");
+
+        registry.Update(
+            new StubSource("addon", "Add-on"),
+            BatteryReading.FromPercent(50, BatteryStatus.Discharging)
+        );
+        Assert.That(sink.Invalidations, Is.EqualTo(4), "an unconfigured source appeared");
+    }
+
     private static BatteryIntegration Build(out DeviceCatalog catalog, out BatteryRegistry registry)
     {
         var options = Options.Create(new BatteryPluginOptions());

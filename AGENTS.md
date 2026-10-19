@@ -76,17 +76,21 @@ src/DeviceBatteryInfo/
                            scanning. Hid/ has the shared HID transport/interop, HidProtocol
                            (what a brand implements) and HidFamily; Razer/RazerProtocol.cs lists the
                            supported mice
-  Variables/BatteryVariableCatalog.cs   slot x field -> VariableDefinition, and the reverse resolve
+  Variables/BatteryVariableCatalog.cs   slot -> its folder (`devices/<slot id>`), slot x field ->
+                           VariableDefinition (in that folder), the search match, and the reverse
+                           resolve
   Localization/Strings.resx   default-culture strings; Strings.<culture>.resx per language
   Assets/icon.svg
   Properties/launchSettings.json   the single real-host debug profile
 tests/DeviceBatteryInfo.Tests/
-  BatteryIntegrationTests.cs      builds, initializes, the variables catalogue + a read work
+  BatteryIntegrationTests.cs      builds, initializes, the variables catalogue (folders, search, folder
+                                  ids, pinned variable ids and names) + a read work
   BatterySourceParsingTests.cs    Razer report / PnP / Win32 power-status parsers, the Android picker
   BatteryTrendTrackerTests.cs     trend windows, segments per charging state, the trend text
   BatteryWidgetViewTests.cs       every widget tree built through a real UiView, the config form, glyph
                                   paths, responsive variants, the previews
-  CatalogNotificationTests.cs     the integration never takes a catalog notifier, and re-initializes cleanly
+  CatalogNotificationTests.cs     the integration never takes a catalog notifier, re-initializes cleanly,
+                                  and reloads the variable catalog only when the devices change
   DeviceConfigFlowTests.cs        the config flow end to end, the way the host drives it
   DeviceEntryReaderTests.cs       config entries -> device slots, including the legacy keys
   DeviceFamilyTests.cs            model ids, the catalog, DeviceFamilyProvider
@@ -127,6 +131,25 @@ Design knowledge that is not obvious from the code alone:
   empty and let the host reach each `battery_<id>_<field>` id through `DiscoverAsync`/`ResolveAsync`
   instead. `SupportsPush` + `OnAttachedAsync` still push live updates to an attached session; `ReadAsync`
   answers a direct `get`.
+  **The catalog is a tree: one folder per device.** The host draws folders only for a provider with
+  `SupportsSearch => true`; without it, it walks every container and lists the leaves flat. With it,
+  `DiscoverAsync` answers three shapes: no parent and no search gives the folders (`IsContainer`, not
+  bindable, id `devices/<slot id>`), a folder id as `ParentId` gives that device's variables (each with
+  that `ParentId`), and no parent with a search gives the matching variables of every device, never a
+  folder: every word typed (split on space, `_` and `.`, the host strips a leading `vars.`) must appear
+  in the variable's `Name` or the device's display name, ignoring case. A slug never has a `/`, so a
+  folder id can never be a variable id; `TryResolve` rejects it, so a read or subscribe of a folder is
+  unavailable, and `ResolveAsync` returns the folder. The host stores a link as the variable's `Id` plus a
+  copy of its name (`dynamic-variable-bindings.json`), so the ids and names stay exactly
+  `<slot>-<suffix>` and `battery_<slot>_<suffix>`; the folder is only a `ParentId`. The host keeps the tree
+  it browsed last, even across a plugin restart, until `IVariableSink.InvalidateCatalogAsync`: the
+  integration calls it in `OnAttachedAsync` and whenever the device ids or display names change
+  (`DeviceCatalog.Changed`, or a registry source outside the config appearing, going or renamed),
+  compared against the set it last announced, so readings never trigger one. It only signals the host's
+  browser to re-discover, which never changes the device set, so it cannot loop the way
+  `CatalogChanged` does. `CatalogEntryCount` counts the bindable variables, not the folders. A device
+  name is passed to the variable strings as a plain argument; a localized string as the argument would
+  render as `{placeholder}` in the host.
 - **`DeviceCatalog` is the single source of device identity at runtime.** Providers, the variable
   catalogue and the widgets all read `DeviceCatalog.Devices`. It starts empty and is populated only by
   `BatteryIntegration.InitializeAsync` from the config-flow entries (`DeviceEntryReader`) - there is no
@@ -854,8 +877,9 @@ integration, which re-enters `InitializeAsync`, which notifies again - an 8-deep
 every provided variable failing to register as `AlreadyExists` (net: zero variables, and the
 localization + widget-type registration churned so strings render as `[[plugin:<id>:Key]]` and the
 widgets vanish). `BatteryIntegration` therefore takes no `IPluginCatalogNotifier` at all
-(`CatalogNotificationTests` asserts that): a device-set change only re-polls, and the on-demand variable
-catalogue is resolved live. Integration issues need no notification either, because the host lists them
+(`CatalogNotificationTests` asserts that): a device-set change only re-polls and reloads the variable
+browser through `IVariableSink.InvalidateCatalogAsync` (a different, loop-free signal, see the catalog
+note under Orientation), and the on-demand variable catalogue is resolved live. Integration issues need no notification either, because the host lists them
 with a live call on its own schedule (confirmed: the Linux HID issue appears without one).
 
 ### Configuration and secrets

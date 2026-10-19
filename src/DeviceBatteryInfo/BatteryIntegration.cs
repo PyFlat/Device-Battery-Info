@@ -44,6 +44,7 @@ public sealed partial class BatteryIntegration(
 
     private IIntegrationContext? _context;
     private IVariableSink? _sink;
+    private string? _catalogDevices;
 
     public IReadOnlyList<IActionDefinition> Actions { get; } = [new RefreshBatteryAction(polling)];
 
@@ -94,14 +95,12 @@ public sealed partial class BatteryIntegration(
         DetachBatteryCatalog();
         _context = null;
         _sink = null;
+        _catalogDevices = null;
         return Task.CompletedTask;
     }
 
     // Empty on purpose: every variable is served through the catalog below (SupportsCatalog), not this list.
     public IReadOnlyList<VariableDefinition> Variables => Array.Empty<VariableDefinition>();
-
-    private IReadOnlyList<VariableDefinition> CatalogDefinitions() =>
-        BatteryVariableCatalog.Build(CurrentSlots());
 
     // Configured devices plus any the registry has seen, so a contributed provider needs no config flow.
     private List<BatterySlot> CurrentSlots()
@@ -131,11 +130,46 @@ public sealed partial class BatteryIntegration(
         // Just re-poll. Never call IPluginCatalogNotifier.CatalogChanged from here: it re-enters
         // InitializeAsync, which would call it again: an infinite re-registration loop.
         _polling.RequestRefresh();
+        InvalidateCatalogIfDevicesChanged();
+    }
+
+    // The host keeps the catalog it browsed last, even across a plugin restart, until told to reload it.
+    private void InvalidateCatalogIfDevicesChanged()
+    {
+        var sink = _sink;
+        if (sink is null)
+        {
+            return;
+        }
+
+        var devices = DeviceSignature();
+        if (Interlocked.Exchange(ref _catalogDevices, devices) != devices)
+        {
+            _ = InvalidateCatalogAsync(sink, CancellationToken.None);
+        }
+    }
+
+    private string DeviceSignature() =>
+        string.Join('\n', CurrentSlots().Select(slot => $"{slot.Id}\t{slot.DisplayName}"));
+
+    private async Task InvalidateCatalogAsync(IVariableSink sink, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await sink.InvalidateCatalogAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.Debug(exception, "Invalidating the variable catalog failed.");
+        }
     }
 
     public bool SupportsCatalog => true;
 
     public bool SupportsPush => true;
+
+    // Without search the host flattens the catalog and lists no folders.
+    public bool SupportsSearch => true;
 
     public string CatalogName => "Battery";
 
@@ -144,7 +178,8 @@ public sealed partial class BatteryIntegration(
     public Task OnAttachedAsync(IVariableSink sink, CancellationToken cancellationToken = default)
     {
         _sink = sink;
-        return Task.CompletedTask;
+        Volatile.Write(ref _catalogDevices, DeviceSignature());
+        return InvalidateCatalogAsync(sink, cancellationToken);
     }
 
     public ValueTask<VariableCatalogPage> DiscoverAsync(
@@ -152,19 +187,25 @@ public sealed partial class BatteryIntegration(
         CancellationToken cancellationToken = default
     )
     {
-        IEnumerable<VariableDefinition> defs = CatalogDefinitions();
-        if (!string.IsNullOrWhiteSpace(query.Search))
+        var slots = CurrentSlots();
+        VariableDefinition[] ordered = query switch
         {
-            defs = defs.Where(d =>
-                (
-                    d.Name is { } name
-                    && name.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
-                )
-                || (d.Id is { } id && id.Contains(query.Search, StringComparison.OrdinalIgnoreCase))
-            );
-        }
+            { ParentId: null, Search: { } search } when !string.IsNullOrWhiteSpace(search) =>
+            [
+                .. slots.SelectMany(slot =>
+                    BatteryVariableCatalog
+                        .ForDevice(slot)
+                        .Where(variable => BatteryVariableCatalog.Matches(variable, slot, search))
+                ),
+            ],
+            { ParentId: null } => [.. slots.Select(BatteryVariableCatalog.Folder)],
+            _ => slots.Find(slot =>
+                BatteryVariableCatalog.FolderId(slot.Id) == query.ParentId
+            ) is { } parent
+                ? [.. BatteryVariableCatalog.ForDevice(parent)]
+                : [],
+        };
 
-        var ordered = defs.ToArray();
         var start = int.TryParse(query.ContinuationToken, out var parsed)
             ? Math.Clamp(parsed, 0, ordered.Length)
             : 0;
@@ -189,7 +230,12 @@ public sealed partial class BatteryIntegration(
         CancellationToken cancellationToken = default
     ) =>
         ValueTask.FromResult(
-            CatalogDefinitions()
+            CurrentSlots()
+                .SelectMany(slot =>
+                    BatteryVariableCatalog
+                        .ForDevice(slot)
+                        .Prepend(BatteryVariableCatalog.Folder(slot))
+                )
                 .FirstOrDefault(d => string.Equals(d.ResolvedId, localId, StringComparison.Ordinal))
         );
 
@@ -300,6 +346,11 @@ public sealed partial class BatteryIntegration(
 
     private void OnSnapshotChanged(object? sender, BatterySnapshotChangedEventArgs e)
     {
+        if (e.Previous?.DisplayName != e.Current?.DisplayName)
+        {
+            InvalidateCatalogIfDevicesChanged();
+        }
+
         if (e.Current is not { } current)
         {
             return;

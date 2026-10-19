@@ -36,18 +36,34 @@ internal static class BatteryVariableCatalog
         .. Fields.Select(f => (f.Field, f.Suffix)).OrderByDescending(f => f.Suffix.Length),
     ];
 
-    public static IReadOnlyList<VariableDefinition> Build(IReadOnlyList<BatterySlot> slots)
-    {
-        var definitions = new List<VariableDefinition>(slots.Count * Fields.Length);
-        foreach (var slot in slots)
-        {
-            foreach (var (field, suffix, type) in Fields)
-            {
-                definitions.Add(Define(slot, field, suffix, type));
-            }
-        }
+    // A slug never contains '/', so a folder id can never be a variable id.
+    private const string FolderIdPrefix = "devices/";
 
-        return definitions;
+    private static readonly char[] SearchSeparators = [' ', '_', '.'];
+
+    public static IReadOnlyList<VariableDefinition> Build(IReadOnlyList<BatterySlot> slots) =>
+        [.. slots.SelectMany(ForDevice)];
+
+    public static IReadOnlyList<VariableDefinition> ForDevice(BatterySlot slot) =>
+        [.. Fields.Select(f => Define(slot, f.Field, f.Suffix, f.Type))];
+
+    public static string FolderId(string slotId) => FolderIdPrefix + slotId;
+
+    public static VariableDefinition Folder(BatterySlot slot) =>
+        VariableDefinition.OnDemand(FolderId(slot.Id), VariableType.Text) with
+        {
+            DisplayName = slot.DisplayName,
+            IsContainer = true,
+            IsBindable = false,
+        };
+
+    // Every word typed must appear in the variable's name or its device's name ("phone percent").
+    public static bool Matches(VariableDefinition variable, BatterySlot slot, string search)
+    {
+        var text = $"{variable.Name} {slot.DisplayName}";
+        return search
+            .Split(SearchSeparators, StringSplitOptions.RemoveEmptyEntries)
+            .All(word => text.Contains(word, StringComparison.OrdinalIgnoreCase));
     }
 
     public static IEnumerable<(string LocalId, Field Field)> FieldsFor(string slotId) =>
@@ -55,6 +71,13 @@ internal static class BatteryVariableCatalog
 
     public static bool TryResolve(string localId, out string slotId, out Field field)
     {
+        slotId = string.Empty;
+        field = default;
+        if (localId.StartsWith(FolderIdPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         foreach (var (candidate, suffix) in SuffixesByLength)
         {
             if (
@@ -68,8 +91,6 @@ internal static class BatteryVariableCatalog
             }
         }
 
-        slotId = string.Empty;
-        field = default;
         return false;
     }
 
@@ -120,6 +141,7 @@ internal static class BatteryVariableCatalog
             Name = $"battery_{slot.Id.Replace('-', '_')}_{suffix.Replace('-', '_')}",
             Type = type,
             Materialization = VariableMaterialization.OnDemand,
+            ParentId = FolderId(slot.Id),
             DisplayName = displayName,
             Description = description,
             DecimalPlaces = field switch
