@@ -50,6 +50,14 @@ internal static class NativeHid
         uint bufferLength
     );
 
+    [DllImport("hid.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool HidD_GetInputReport(
+        SafeFileHandle device,
+        byte[] buffer,
+        uint bufferLength
+    );
+
     internal static SafeFileHandle Open(string devicePath)
     {
         var handle = CreateFile(
@@ -101,4 +109,7 @@ internal static class NativeHid
             throw new Win32Exception(Marshal.GetLastWin32Error(), "HidD_GetFeature failed.");
         }
     }
+
+    internal static bool TryGetInputReport(SafeFileHandle device, byte[] report) =>
+        HidD_GetInputReport(device, report, (uint)report.Length);
 }

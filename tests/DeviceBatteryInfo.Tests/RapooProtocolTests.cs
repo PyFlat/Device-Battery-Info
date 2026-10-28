@@ -45,4 +45,65 @@ public sealed class RapooProtocolTests
     [Test]
     public void Only_the_status_report_counts() =>
         Assert.That(RapooProtocol.IsStatusReport([0x07, 0, 0, 0, 0, 1, 50]), Is.False);
+
+    [Test]
+    public void Builds_correct_mt760_query_request()
+    {
+        var request = RapooOfficeProtocol.BuildBatteryRequest();
+        Assert.That(request.Length, Is.EqualTo(32));
+        Assert.That(request[0..3], Is.EqualTo(new byte[] { 0xBA, 0xA5, 0xAA }));
+    }
+
+    [Test]
+    public void Reads_mt760_battery_level_and_discharging_state()
+    {
+        // Live response captured from MT760: 0x01 (status), 0x01 (discharging), 0x42 (66%)
+        byte[] liveResponse = [0x01, 0x01, 0x42, .. new byte[29]];
+        Assert.That(RapooOfficeProtocol.IsBatteryReply(liveResponse), Is.True);
+
+        var reading = RapooOfficeProtocol.ParseBattery(liveResponse);
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(reading.Percent, Is.EqualTo(66));
+            Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Discharging));
+        }
+    }
+
+    [Test]
+    public void Reads_mt760_battery_level_with_report_id()
+    {
+        byte[] responseWithId = [0xBA, 0x01, 0x01, 0x42, .. new byte[28]];
+        Assert.That(RapooOfficeProtocol.IsBatteryReply(responseWithId), Is.True);
+
+        var reading = RapooOfficeProtocol.ParseBattery(responseWithId);
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(reading.Percent, Is.EqualTo(66));
+            Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Discharging));
+        }
+    }
+
+    [Test]
+    public void Reads_mt760_charging_and_full_states()
+    {
+        byte[] chargingResponse = [0x01, 0x02, 85, .. new byte[29]];
+        var reading = RapooOfficeProtocol.ParseBattery(chargingResponse);
+        Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Charging));
+
+        byte[] fullResponse = [0x01, 0x02, 100, .. new byte[29]];
+        var fullReading = RapooOfficeProtocol.ParseBattery(fullResponse);
+        Assert.That(fullReading.Status, Is.EqualTo(BatteryStatus.Full));
+    }
+
+    [Test]
+    public void Mt760_rejects_unrelated_or_invalid_reports()
+    {
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(RapooOfficeProtocol.IsBatteryReply([0x00, 0x01, 50, .. new byte[29]]), Is.False);
+            Assert.That(RapooOfficeProtocol.IsBatteryReply([0x01, 0x01, 0, .. new byte[29]]), Is.False);
+            Assert.That(RapooOfficeProtocol.IsBatteryReply([0x01, 0x01, 101, .. new byte[29]]), Is.False);
+            Assert.That(RapooOfficeProtocol.IsBatteryReply([0xBA, 0x00, 0x01, 50, .. new byte[28]]), Is.False);
+        }
+    }
 }

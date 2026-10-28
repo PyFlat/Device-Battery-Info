@@ -341,11 +341,12 @@ internal sealed partial class HidSharpTransport : IHidTransport
                 }
 
                 var clock = Stopwatch.StartNew();
+                var reportId = request.Length > 0 ? request[0] : (byte)0;
                 while (clock.Elapsed < budget)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    if (stream.Read(ReportReadTimeout) is not { } input)
+                    if (stream.Read(ReportReadTimeout, reportId) is not { } input)
                     {
                         continue;
                     }
@@ -550,12 +551,15 @@ internal interface IReportStream : IDisposable
     void Write(byte[] report);
 
     // Null when no report arrived within the timeout.
-    byte[]? Read(TimeSpan timeout);
+    byte[]? Read(TimeSpan timeout, byte reportId = 0);
 }
 
 internal sealed class HidSharpReportStream(HidDevice device) : IReportStream
 {
     private readonly HidStream _stream = device.Open();
+    private readonly Lazy<Microsoft.Win32.SafeHandles.SafeFileHandle?> _nativeHandle = new(() =>
+        OperatingSystem.IsWindows() ? NativeHid.Open(device.DevicePath) : null
+    );
 
     public int OutputReportLength(byte reportId)
     {
@@ -572,7 +576,7 @@ internal sealed class HidSharpReportStream(HidDevice device) : IReportStream
 
     public void Write(byte[] report) => _stream.Write(report);
 
-    public byte[]? Read(TimeSpan timeout)
+    public byte[]? Read(TimeSpan timeout, byte reportId = 0)
     {
         _stream.ReadTimeout = (int)timeout.TotalMilliseconds;
         var input = new byte[device.GetMaxInputReportLength()];
@@ -583,11 +587,27 @@ internal sealed class HidSharpReportStream(HidDevice device) : IReportStream
         }
         catch (TimeoutException)
         {
+            if (OperatingSystem.IsWindows() && _nativeHandle.Value is { } handle)
+            {
+                input[0] = reportId;
+                if (NativeHid.TryGetInputReport(handle, input))
+                {
+                    return input;
+                }
+            }
+
             return null;
         }
     }
 
-    public void Dispose() => _stream.Dispose();
+    public void Dispose()
+    {
+        _stream.Dispose();
+        if (_nativeHandle.IsValueCreated && _nativeHandle.Value is { } handle)
+        {
+            handle.Dispose();
+        }
+    }
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("macos")]
@@ -617,7 +637,7 @@ internal sealed class MacReportStream : IReportStream
 
     public void Write(byte[] report) => _device.SetReport(MacHidReportType.Output, report);
 
-    public byte[]? Read(TimeSpan timeout) => _device.ReadInputReport(timeout);
+    public byte[]? Read(TimeSpan timeout, byte reportId = 0) => _device.ReadInputReport(timeout);
 
     public void Dispose() => _device.Dispose();
 }

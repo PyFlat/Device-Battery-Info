@@ -58,3 +58,85 @@ internal sealed class RapooProtocol()
         };
     }
 }
+
+// MT-series office mice answer an active query on vendor collection FF00:000E.
+internal sealed class RapooOfficeProtocol()
+    : HidProtocol(
+        "Rapoo",
+        vendorId: 0x24AE,
+        reportLength: FrameLength,
+        HidReportKind.InputOutput,
+        usagePage: 0xFF00,
+        usage: 0x000E
+    )
+{
+    private const int FrameLength = 32;
+    private const byte ReportId = 0xBA;
+    private const byte VendorPrefix = 0xA5;
+    private const byte BatteryCommand = 0xAA;
+
+    private const byte StatusSuccess = 0x01;
+    private const byte OnBattery = 0x01;
+    private const byte Charging = 0x02;
+
+    public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
+        [new("MT760", 0x1870), new("MT760 Mini", 0x1870)];
+
+    public override TimeSpan? ReadBudget => TimeSpan.FromSeconds(2);
+
+    public override async Task<BatteryReading> ReadAsync(
+        HidChannel channel,
+        HidDeviceInfo device,
+        CancellationToken cancellationToken
+    ) => ParseBattery(await channel.ExchangeAsync(BuildBatteryRequest(), IsBatteryReply, cancellationToken));
+
+    internal static byte[] BuildBatteryRequest() =>
+    [
+        ReportId,
+        VendorPrefix,
+        BatteryCommand,
+        .. new byte[FrameLength - 3],
+    ];
+
+    internal static bool IsBatteryReply(byte[] report)
+    {
+        if (report.Length < 3)
+        {
+            return false;
+        }
+
+        // The driver may include or strip the 0xBA report ID at index 0.
+        if (report[0] == ReportId && report.Length >= 4)
+        {
+            return report[1] == StatusSuccess && report[3] > 0 && report[3] <= 100;
+        }
+
+        return report[0] == StatusSuccess && report[2] > 0 && report[2] <= 100;
+    }
+
+    internal static BatteryReading ParseBattery(ReadOnlySpan<byte> report)
+    {
+        int offset = (report.Length >= 4 && report[0] == ReportId) ? 1 : 0;
+        var status = report[offset];
+        if (status != StatusSuccess)
+        {
+            throw new InvalidOperationException($"The mouse reported non-success status 0x{status:X2}.");
+        }
+
+        var state = report[offset + 1];
+        var level = report[offset + 2];
+
+        if (level == 0 || level > 100)
+        {
+            throw new InvalidOperationException($"The mouse reported invalid battery percentage {level}%.");
+        }
+
+        return state switch
+        {
+            Charging when level >= 100 => BatteryReading.FromPercent(level, BatteryStatus.Full),
+            Charging => BatteryReading.FromPercent(level, BatteryStatus.Charging),
+            OnBattery => BatteryReading.FromPercent(level, BatteryStatus.Discharging),
+            _ => BatteryReading.FromPercent(level),
+        };
+    }
+}

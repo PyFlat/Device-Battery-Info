@@ -30,6 +30,7 @@ public sealed class HardwareTests
         new LogitechVoltageBatteryProtocol(),
         new CorsairProtocol(),
         new RapooProtocol(),
+        new RapooOfficeProtocol(),
         new AulaProtocol(),
         new SonyProtocol(),
         new MchoseProtocol(),
