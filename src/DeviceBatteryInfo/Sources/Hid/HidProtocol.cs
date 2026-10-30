@@ -22,7 +22,8 @@ internal sealed class HidChannel(
     string devicePath,
     int productId,
     HidReportKind kind = HidReportKind.Feature,
-    TimeSpan? budget = null
+    TimeSpan? budget = null,
+    bool fallbackToGetInputReport = false
 )
 {
     public static readonly TimeSpan ReadBudget = TimeSpan.FromMilliseconds(2000);
@@ -54,6 +55,7 @@ internal sealed class HidChannel(
                 request,
                 isComplete,
                 budget ?? ReadBudget,
+                fallbackToGetInputReport,
                 cancellationToken
             );
 
@@ -88,6 +90,10 @@ internal abstract class HidProtocol(
     // How long one read (and the interface probe) may wait. Override for a device that only reports
     // on its own schedule, slower than the default budgets.
     public virtual TimeSpan? ReadBudget => null;
+
+    // Some HID devices (such as Rapoo office mice) do not send interrupt input reports
+    // upon query frames; their reports can only be retrieved via HidD_GetInputReport.
+    public virtual bool FallbackToGetInputReport => false;
 
     public abstract IReadOnlyList<HidDeviceInfo> Devices { get; }
 

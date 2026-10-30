@@ -63,6 +63,15 @@ internal interface IHidTransport
         CancellationToken cancellationToken
     );
 
+    Task<byte[]> ExchangeReportsAsync(
+        string devicePath,
+        byte[] request,
+        Func<byte[], bool> isComplete,
+        TimeSpan budget,
+        bool fallbackToGetInputReport,
+        CancellationToken cancellationToken
+    ) => ExchangeReportsAsync(devicePath, request, isComplete, budget, cancellationToken);
+
     // Reads one feature report without writing anything first (unlike ExchangeAsync).
     Task<byte[]> GetFeatureAsync(
         string devicePath,
@@ -311,11 +320,20 @@ internal sealed partial class HidSharpTransport : IHidTransport
         Func<byte[], bool> isComplete,
         TimeSpan budget,
         CancellationToken cancellationToken
+    ) => ExchangeReportsAsync(devicePath, request, isComplete, budget, fallbackToGetInputReport: false, cancellationToken);
+
+    public Task<byte[]> ExchangeReportsAsync(
+        string devicePath,
+        byte[] request,
+        Func<byte[], bool> isComplete,
+        TimeSpan budget,
+        bool fallbackToGetInputReport,
+        CancellationToken cancellationToken
     ) =>
         BoundAsync(
             $"HID report exchange on {devicePath}",
             budget,
-            ct => ExchangeInputOutputReportsAsync(devicePath, request, isComplete, budget, ct),
+            ct => ExchangeInputOutputReportsAsync(devicePath, request, isComplete, budget, ct, fallbackToGetInputReport),
             cancellationToken
         );
 
@@ -324,12 +342,13 @@ internal sealed partial class HidSharpTransport : IHidTransport
         byte[] request,
         Func<byte[], bool> isComplete,
         TimeSpan budget,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        bool fallbackToGetInputReport = false
     ) =>
         await Task.Run(
             () =>
             {
-                using var stream = OpenReportStream(devicePath);
+                using var stream = OpenReportStream(devicePath, fallbackToGetInputReport);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // An empty request only listens, for a device that pushes its state on its own (Rapoo).
@@ -370,7 +389,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
             cancellationToken
         );
 
-    private static IReportStream OpenReportStream(string devicePath)
+    private static IReportStream OpenReportStream(string devicePath, bool fallbackToGetInputReport = false)
     {
         if (OperatingSystem.IsMacOS())
         {
@@ -381,7 +400,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
         var device =
             FindHidSharpDevice(devicePath)
             ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
-        return new HidSharpReportStream(device);
+        return new HidSharpReportStream(device, fallbackToGetInputReport);
     }
 
     // Off Windows one device carries every collection, so its longest output report is not the length of the
@@ -554,11 +573,11 @@ internal interface IReportStream : IDisposable
     byte[]? Read(TimeSpan timeout, byte reportId = 0);
 }
 
-internal sealed class HidSharpReportStream(HidDevice device) : IReportStream
+internal sealed class HidSharpReportStream(HidDevice device, bool fallbackToGetInputReport = false) : IReportStream
 {
     private readonly HidStream _stream = device.Open();
     private readonly Lazy<Microsoft.Win32.SafeHandles.SafeFileHandle?> _nativeHandle = new(() =>
-        OperatingSystem.IsWindows() ? NativeHid.Open(device.DevicePath) : null
+        OperatingSystem.IsWindows() && fallbackToGetInputReport ? NativeHid.TryOpen(device.DevicePath) : null
     );
 
     public int OutputReportLength(byte reportId)
@@ -587,7 +606,7 @@ internal sealed class HidSharpReportStream(HidDevice device) : IReportStream
         }
         catch (TimeoutException)
         {
-            if (OperatingSystem.IsWindows() && _nativeHandle.Value is { } handle)
+            if (fallbackToGetInputReport && OperatingSystem.IsWindows() && _nativeHandle.Value is { } handle)
             {
                 input[0] = reportId;
                 if (NativeHid.TryGetInputReport(handle, input))

@@ -94,6 +94,48 @@ internal static class NativeHid
         return handle;
     }
 
+    internal static SafeFileHandle? TryOpen(string devicePath)
+    {
+        try
+        {
+            var handle = CreateFile(
+                devicePath,
+                GenericRead | GenericWrite,
+                FileShareRead | FileShareWrite,
+                securityAttributes: 0,
+                OpenExisting,
+                flagsAndAttributes: 0,
+                templateFile: 0
+            );
+
+            if (handle.IsInvalid)
+            {
+                handle.Dispose();
+                handle = CreateFile(
+                    devicePath,
+                    desiredAccess: 0,
+                    FileShareRead | FileShareWrite,
+                    securityAttributes: 0,
+                    OpenExisting,
+                    flagsAndAttributes: 0,
+                    templateFile: 0
+                );
+            }
+
+            if (handle.IsInvalid)
+            {
+                handle.Dispose();
+                return null;
+            }
+
+            return handle;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     internal static void SetFeature(SafeFileHandle device, byte[] report)
     {
         if (!HidD_SetFeature(device, report, (uint)report.Length))

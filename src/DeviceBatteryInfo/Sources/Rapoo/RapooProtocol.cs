@@ -80,9 +80,9 @@ internal sealed class RapooOfficeProtocol()
     private const byte Charging = 0x02;
 
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
-        [new("MT760", 0x1870), new("MT760 Mini", 0x1870)];
+        [new("MT760", 0x1870)];
 
-    public override TimeSpan? ReadBudget => TimeSpan.FromSeconds(2);
+    public override bool FallbackToGetInputReport => true;
 
     public override async Task<BatteryReading> ReadAsync(
         HidChannel channel,
@@ -98,35 +98,21 @@ internal sealed class RapooOfficeProtocol()
         .. new byte[FrameLength - 3],
     ];
 
-    internal static bool IsBatteryReply(byte[] report)
-    {
-        if (report.Length < 3)
-        {
-            return false;
-        }
-
-        // The driver may include or strip the 0xBA report ID at index 0.
-        if (report[0] == ReportId && report.Length >= 4)
-        {
-            return report[1] == StatusSuccess && report[3] > 0 && report[3] <= 100;
-        }
-
-        return report[0] == StatusSuccess && report[2] > 0 && report[2] <= 100;
-    }
+    internal static bool IsBatteryReply(byte[] report) =>
+        report.Length >= 3 && report[0] == StatusSuccess && report[2] is > 0 and <= 100;
 
     internal static BatteryReading ParseBattery(ReadOnlySpan<byte> report)
     {
-        int offset = (report.Length >= 4 && report[0] == ReportId) ? 1 : 0;
-        var status = report[offset];
+        var status = report[0];
         if (status != StatusSuccess)
         {
             throw new InvalidOperationException($"The mouse reported non-success status 0x{status:X2}.");
         }
 
-        var state = report[offset + 1];
-        var level = report[offset + 2];
+        var state = report[1];
+        var level = report[2];
 
-        if (level == 0 || level > 100)
+        if (level is 0 or > 100)
         {
             throw new InvalidOperationException($"The mouse reported invalid battery percentage {level}%.");
         }

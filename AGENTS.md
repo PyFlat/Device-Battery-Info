@@ -560,20 +560,21 @@ Design knowledge that is not obvious from the code alone:
   irregular** (3 s bursts, then 30-60 s of silence, while the mouse is in use), so a 4 s read and the
   probe often miss them: the probe then falls back to the silent dongle collection and the reading
   goes stale. Accepted as a known limitation; the fix would be a background listener caching the last
-  report per path, instead of listening per poll. Over the dongle the push is a steady 3.2 s. It is the one protocol
-  that listens only, so `ExchangeReportsAsync` skips the write for an empty request, and it overrides
-  `HidProtocol.ReadBudget` (4 s), because the 400 ms probe and 2 s read budgets are shorter than the
-  push interval. A switched-off mouse is silent, so the read times out. PID `1215` is not the VT3 PRO
-  id that the open-source Rapoo tools document (`1231`, `14A5`), and their report layouts do not
-  apply to it. Rapoo office mice (`RapooOfficeProtocol`: MT760, MT760 Mini, dongle `1870`) talk on vendor
-  collection `FF00:000E` (32-byte reports): unlike the VT series, they require an active query report
-  `BA A5 AA 00...`, answered by input report `01 <state> <level>...` (or `BA 01 <state> <level>`). State 1
-  is on battery, 2 charging; level 1..100. `Sources/Aula/AulaProtocol.cs` (F75 on the Compx receiver `3554:FA09`) sends the
-  battery-hub / womier-l65-linux frame on `FF02:0002`: report `0x13`, command `0x4A`, 20 bytes, and
-  the last byte is the byte sum of the rest. The reply has the level in byte 5 and the state in byte 6
-  (`0x01` on battery, `0x10` with the cable in). With the cable in the level always reads 100, even at
-  a real 97%, so that reads as Charging with no percent (charging and full cannot be told apart). The receiver also pushes
-  unsolicited `0x13 0A` frames, so a reply must match the command and the checksum. In wired mode the
+  report per path, instead of listening per poll. Over the dongle the push is a steady 3.2 s. It is
+  the one protocol that listens only, so `ExchangeReportsAsync` skips the write for an empty request,
+  and it overrides `HidProtocol.ReadBudget` (4 s), because the 400 ms probe and 2 s read budgets are
+  shorter than the push interval. A switched-off mouse is silent, so the read times out. PID `1215`
+  is not the VT3 PRO id that the open-source Rapoo tools document (`1231`, `14A5`), and their report
+  layouts do not apply to it. Rapoo office mice (`RapooOfficeProtocol`: MT760, dongle `1870`) talk
+  on vendor collection `FF00:000E` (32-byte reports): unlike the VT series, they require an active
+  query report `BA A5 AA 00...`, answered by input report `01 <state> <level>...`. State 1 is on
+  battery, 2 charging; level 1..100. `Sources/Aula/AulaProtocol.cs` (F75 on the Compx receiver
+  `3554:FA09`) sends the battery-hub / womier-l65-linux frame on `FF02:0002`: report `0x13`, command
+  `0x4A`, 20 bytes, and the last byte is the byte sum of the rest. The reply has the level in byte 5
+  and the state in byte 6 (`0x01` on battery, `0x10` with the cable in). With the cable in the level
+  always reads 100, even at a real 97%, so that reads as Charging with no percent (charging and full
+  cannot be told apart). The receiver also pushes unsolicited `0x13 0A` frames, so a reply must match
+  the command and the checksum. In wired mode the
   keyboard enumerates as a separate Sinowealth device (`258A:010C`), with an unknown protocol, and is
   not read. Command `0x44` returns a 10-frame configuration dump (probably lighting) that is not
   mapped. The 8BitDo Ultimate (`2DC8:3106`) is deliberately absent: its dongle presents an
