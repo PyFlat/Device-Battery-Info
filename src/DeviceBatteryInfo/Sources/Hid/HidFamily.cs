@@ -84,8 +84,7 @@ internal sealed class HidFamily(
                     candidate.Path,
                     candidate.ProductId,
                     model.Protocol.ReportKind,
-                    model.Protocol.ReadBudget,
-                    model.Protocol.FallbackToGetInputReport
+                    model.Protocol.ReadBudget
                 );
                 sources.Add(
                     new DelegateBatterySource(
@@ -201,8 +200,7 @@ internal sealed class HidFamily(
                     candidate.ProductId,
                     model.Protocol.ReportKind,
                     // A device that only pushes needs its whole interval even to be found.
-                    model.Protocol.ReadBudget ?? HidChannel.ProbeBudget,
-                    model.Protocol.FallbackToGetInputReport
+                    model.Protocol.ReadBudget ?? HidChannel.ProbeBudget
                 );
                 _ = await model.Protocol.ReadAsync(channel, model.Device, cancellationToken);
                 _resolvedPaths[slot.Id] = candidate.Path;

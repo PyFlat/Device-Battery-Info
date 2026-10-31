@@ -56,8 +56,6 @@ printf '%s\n' \
   '# Rapoo VT3 PRO' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="24ae", ATTRS{idProduct}=="1215", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="24ae", ATTRS{idProduct}=="4415", TAG+="uaccess"' \
-  '# Rapoo MT760' \
-  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="24ae", ATTRS{idProduct}=="1870", TAG+="uaccess"' \
   '# Razer DeathAdder V3 Pro' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00b7", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00b6", TAG+="uaccess"' \

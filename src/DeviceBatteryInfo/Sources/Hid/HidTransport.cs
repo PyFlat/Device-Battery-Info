@@ -63,14 +63,14 @@ internal interface IHidTransport
         CancellationToken cancellationToken
     );
 
-    Task<byte[]> ExchangeReportsAsync(
+    // Writes an output report and fetches the input report directly rather than waiting for a stream.
+    Task<byte[]> ExchangeGetInputReportAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
         TimeSpan budget,
-        bool fallbackToGetInputReport,
         CancellationToken cancellationToken
-    ) => ExchangeReportsAsync(devicePath, request, isComplete, budget, cancellationToken);
+    ) => throw new NotSupportedException();
 
     // Reads one feature report without writing anything first (unlike ExchangeAsync).
     Task<byte[]> GetFeatureAsync(
@@ -320,20 +320,25 @@ internal sealed partial class HidSharpTransport : IHidTransport
         Func<byte[], bool> isComplete,
         TimeSpan budget,
         CancellationToken cancellationToken
-    ) => ExchangeReportsAsync(devicePath, request, isComplete, budget, fallbackToGetInputReport: false, cancellationToken);
-
-    public Task<byte[]> ExchangeReportsAsync(
-        string devicePath,
-        byte[] request,
-        Func<byte[], bool> isComplete,
-        TimeSpan budget,
-        bool fallbackToGetInputReport,
-        CancellationToken cancellationToken
     ) =>
         BoundAsync(
             $"HID report exchange on {devicePath}",
             budget,
-            ct => ExchangeInputOutputReportsAsync(devicePath, request, isComplete, budget, ct, fallbackToGetInputReport),
+            ct => ExchangeInputOutputReportsAsync(devicePath, request, isComplete, budget, ct),
+            cancellationToken
+        );
+
+    public Task<byte[]> ExchangeGetInputReportAsync(
+        string devicePath,
+        byte[] request,
+        Func<byte[], bool> isComplete,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    ) =>
+        BoundAsync(
+            $"HID get-input-report exchange on {devicePath}",
+            budget,
+            ct => ExchangeGetInputReportsAsync(devicePath, request, isComplete, budget, ct),
             cancellationToken
         );
 
@@ -342,13 +347,12 @@ internal sealed partial class HidSharpTransport : IHidTransport
         byte[] request,
         Func<byte[], bool> isComplete,
         TimeSpan budget,
-        CancellationToken cancellationToken,
-        bool fallbackToGetInputReport = false
+        CancellationToken cancellationToken
     ) =>
         await Task.Run(
             () =>
             {
-                using var stream = OpenReportStream(devicePath, fallbackToGetInputReport);
+                using var stream = OpenReportStream(devicePath);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // An empty request only listens, for a device that pushes its state on its own (Rapoo).
@@ -360,12 +364,11 @@ internal sealed partial class HidSharpTransport : IHidTransport
                 }
 
                 var clock = Stopwatch.StartNew();
-                var reportId = request.Length > 0 ? request[0] : (byte)0;
                 while (clock.Elapsed < budget)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    if (stream.Read(ReportReadTimeout, reportId) is not { } input)
+                    if (stream.Read(ReportReadTimeout) is not { } input)
                     {
                         continue;
                     }
@@ -389,7 +392,56 @@ internal sealed partial class HidSharpTransport : IHidTransport
             cancellationToken
         );
 
-    private static IReportStream OpenReportStream(string devicePath, bool fallbackToGetInputReport = false)
+    private static async Task<byte[]> ExchangeGetInputReportsAsync(
+        string devicePath,
+        byte[] request,
+        Func<byte[], bool> isComplete,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    ) =>
+        await Task.Run(
+            () =>
+            {
+                using var stream = OpenReportStream(devicePath);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                byte[]? output = null;
+                if (request.Length > 0)
+                {
+                    output = new byte[Math.Max(stream.OutputReportLength(request[0]), request.Length)];
+                    request.CopyTo(output, 0);
+                }
+
+                var clock = Stopwatch.StartNew();
+                var reportId = request.Length > 0 ? request[0] : (byte)0;
+                for (var attempt = 1; clock.Elapsed < budget; attempt++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (output is not null)
+                    {
+                        stream.Write(output);
+                    }
+
+                    Thread.Sleep(SettleDelay(attempt));
+
+                    if (stream.GetInputReport(reportId) is { } input && isComplete(input))
+                    {
+                        return input;
+                    }
+
+                    Thread.Sleep(NextRetryDelay());
+                }
+
+                throw new InvalidOperationException(
+                    $"HID get-input-report exchange on {devicePath} was not answered within "
+                        + $"{budget.TotalMilliseconds} ms."
+                );
+            },
+            cancellationToken
+        );
+
+    private static IReportStream OpenReportStream(string devicePath)
     {
         if (OperatingSystem.IsMacOS())
         {
@@ -400,7 +452,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
         var device =
             FindHidSharpDevice(devicePath)
             ?? throw new InvalidOperationException($"HID device {devicePath} is not present.");
-        return new HidSharpReportStream(device, fallbackToGetInputReport);
+        return new HidSharpReportStream(device);
     }
 
     // Off Windows one device carries every collection, so its longest output report is not the length of the
@@ -570,14 +622,19 @@ internal interface IReportStream : IDisposable
     void Write(byte[] report);
 
     // Null when no report arrived within the timeout.
-    byte[]? Read(TimeSpan timeout, byte reportId = 0);
+    byte[]? Read(TimeSpan timeout);
+
+    byte[]? GetInputReport(byte reportId);
 }
 
-internal sealed class HidSharpReportStream(HidDevice device, bool fallbackToGetInputReport = false) : IReportStream
+internal sealed class HidSharpReportStream(HidDevice device) : IReportStream
 {
     private readonly HidStream _stream = device.Open();
     private readonly Lazy<Microsoft.Win32.SafeHandles.SafeFileHandle?> _nativeHandle = new(() =>
-        OperatingSystem.IsWindows() && fallbackToGetInputReport ? NativeHid.TryOpen(device.DevicePath) : null
+        OperatingSystem.IsWindows() ? NativeHid.TryOpen(device.DevicePath) : null
+    );
+    private readonly Lazy<Microsoft.Win32.SafeHandles.SafeFileHandle?> _linuxHandle = new(() =>
+        OperatingSystem.IsLinux() ? LinuxHidraw.TryOpen(device.DevicePath) : null
     );
 
     public int OutputReportLength(byte reportId)
@@ -595,7 +652,7 @@ internal sealed class HidSharpReportStream(HidDevice device, bool fallbackToGetI
 
     public void Write(byte[] report) => _stream.Write(report);
 
-    public byte[]? Read(TimeSpan timeout, byte reportId = 0)
+    public byte[]? Read(TimeSpan timeout)
     {
         _stream.ReadTimeout = (int)timeout.TotalMilliseconds;
         var input = new byte[device.GetMaxInputReportLength()];
@@ -606,17 +663,31 @@ internal sealed class HidSharpReportStream(HidDevice device, bool fallbackToGetI
         }
         catch (TimeoutException)
         {
-            if (fallbackToGetInputReport && OperatingSystem.IsWindows() && _nativeHandle.Value is { } handle)
-            {
-                input[0] = reportId;
-                if (NativeHid.TryGetInputReport(handle, input))
-                {
-                    return input;
-                }
-            }
-
             return null;
         }
+    }
+
+    public byte[]? GetInputReport(byte reportId)
+    {
+        var input = new byte[device.GetMaxInputReportLength()];
+        input[0] = reportId;
+
+        if (OperatingSystem.IsWindows() && _nativeHandle.Value is { } handle)
+        {
+            if (NativeHid.TryGetInputReport(handle, input))
+            {
+                return input;
+            }
+        }
+        else if (OperatingSystem.IsLinux() && _linuxHandle.Value is { } linuxHandle)
+        {
+            if (LinuxHidraw.TryGetInputReport(linuxHandle, input))
+            {
+                return input;
+            }
+        }
+
+        return null;
     }
 
     public void Dispose()
@@ -625,6 +696,11 @@ internal sealed class HidSharpReportStream(HidDevice device, bool fallbackToGetI
         if (_nativeHandle.IsValueCreated && _nativeHandle.Value is { } handle)
         {
             handle.Dispose();
+        }
+
+        if (_linuxHandle.IsValueCreated && _linuxHandle.Value is { } linuxHandle)
+        {
+            linuxHandle.Dispose();
         }
     }
 }
@@ -656,7 +732,23 @@ internal sealed class MacReportStream : IReportStream
 
     public void Write(byte[] report) => _device.SetReport(MacHidReportType.Output, report);
 
-    public byte[]? Read(TimeSpan timeout, byte reportId = 0) => _device.ReadInputReport(timeout);
+    public byte[]? Read(TimeSpan timeout) => _device.ReadInputReport(timeout);
+
+    public byte[]? GetInputReport(byte reportId)
+    {
+        var longest = _descriptor?.MaxInputReportLength ?? 0;
+        var input = new byte[Math.Max(longest, 64)];
+        input[0] = reportId;
+        try
+        {
+            _device.GetInputReport(input);
+            return input;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     public void Dispose() => _device.Dispose();
 }

@@ -65,7 +65,7 @@ internal sealed class RapooOfficeProtocol()
         "Rapoo",
         vendorId: 0x24AE,
         reportLength: FrameLength,
-        HidReportKind.InputOutput,
+        HidReportKind.GetInputReport,
         usagePage: 0xFF00,
         usage: 0x000E
     )
@@ -82,7 +82,7 @@ internal sealed class RapooOfficeProtocol()
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
         [new("MT760", 0x1870)];
 
-    public override bool FallbackToGetInputReport => true;
+    public override bool SupportedOnLinux => false;
 
     public override async Task<BatteryReading> ReadAsync(
         HidChannel channel,

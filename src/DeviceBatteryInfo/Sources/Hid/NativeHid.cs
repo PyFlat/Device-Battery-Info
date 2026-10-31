@@ -98,39 +98,9 @@ internal static class NativeHid
     {
         try
         {
-            var handle = CreateFile(
-                devicePath,
-                GenericRead | GenericWrite,
-                FileShareRead | FileShareWrite,
-                securityAttributes: 0,
-                OpenExisting,
-                flagsAndAttributes: 0,
-                templateFile: 0
-            );
-
-            if (handle.IsInvalid)
-            {
-                handle.Dispose();
-                handle = CreateFile(
-                    devicePath,
-                    desiredAccess: 0,
-                    FileShareRead | FileShareWrite,
-                    securityAttributes: 0,
-                    OpenExisting,
-                    flagsAndAttributes: 0,
-                    templateFile: 0
-                );
-            }
-
-            if (handle.IsInvalid)
-            {
-                handle.Dispose();
-                return null;
-            }
-
-            return handle;
+            return Open(devicePath);
         }
-        catch (Exception)
+        catch (Win32Exception)
         {
             return null;
         }

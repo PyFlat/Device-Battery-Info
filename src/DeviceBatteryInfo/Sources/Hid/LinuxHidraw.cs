@@ -13,6 +13,7 @@ internal static class LinuxHidraw
     private const uint HidrawType = 'H';
     private const uint SetFeatureNumber = 0x06;
     private const uint GetFeatureNumber = 0x07;
+    private const uint GetInputNumber = 0x0A;
     private const int MaxReportLength = 0x3FFF;
 
     // Classic DllImport, matching NativeHid. ioctl is variadic, which x64 and arm64 Linux pass like fixed args.
@@ -34,12 +35,43 @@ internal static class LinuxHidraw
         File.OpenHandle(DeviceNode(devicePath), FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
 
     [SupportedOSPlatform("linux")]
+    internal static SafeFileHandle? TryOpen(string devicePath)
+    {
+        try
+        {
+            return Open(devicePath);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    [SupportedOSPlatform("linux")]
     internal static void SetFeature(SafeFileHandle handle, byte[] report) =>
         Call(handle, SetFeatureNumber, report, "HIDIOCSFEATURE");
 
     [SupportedOSPlatform("linux")]
     internal static void GetFeature(SafeFileHandle handle, byte[] report) =>
         Call(handle, GetFeatureNumber, report, "HIDIOCGFEATURE");
+
+    [SupportedOSPlatform("linux")]
+    internal static void GetInput(SafeFileHandle handle, byte[] report) =>
+        Call(handle, GetInputNumber, report, "HIDIOCGINPUT");
+
+    [SupportedOSPlatform("linux")]
+    internal static bool TryGetInputReport(SafeFileHandle handle, byte[] report)
+    {
+        try
+        {
+            GetInput(handle, report);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
 
     // The size field has 14 bits; a longer length would spill into the direction bits and name another ioctl.
     internal static nuint Request(uint number, int length) =>

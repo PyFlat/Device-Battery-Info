@@ -15,6 +15,9 @@ internal enum HidReportKind
 
     // Output report out, input reports back, on a vendor usage page (Logitech HID++).
     InputOutput,
+
+    // Output report out, input report fetched with GetInputReport rather than streamed (Rapoo office).
+    GetInputReport,
 }
 
 internal sealed class HidChannel(
@@ -22,8 +25,7 @@ internal sealed class HidChannel(
     string devicePath,
     int productId,
     HidReportKind kind = HidReportKind.Feature,
-    TimeSpan? budget = null,
-    bool fallbackToGetInputReport = false
+    TimeSpan? budget = null
 )
 {
     public static readonly TimeSpan ReadBudget = TimeSpan.FromMilliseconds(2000);
@@ -42,22 +44,31 @@ internal sealed class HidChannel(
         Func<byte[], bool> isComplete,
         CancellationToken cancellationToken
     ) =>
-        kind == HidReportKind.Feature
-            ? transport.ExchangeAsync(
+        kind switch
+        {
+            HidReportKind.Feature => transport.ExchangeAsync(
                 DevicePath,
                 request,
                 isComplete,
                 budget ?? ReadBudget,
                 cancellationToken
-            )
-            : transport.ExchangeReportsAsync(
+            ),
+            HidReportKind.InputOutput => transport.ExchangeReportsAsync(
                 DevicePath,
                 request,
                 isComplete,
                 budget ?? ReadBudget,
-                fallbackToGetInputReport,
                 cancellationToken
-            );
+            ),
+            HidReportKind.GetInputReport => transport.ExchangeGetInputReportAsync(
+                DevicePath,
+                request,
+                isComplete,
+                budget ?? ReadBudget,
+                cancellationToken
+            ),
+            _ => throw new NotSupportedException($"Unsupported HID report kind: {kind}"),
+        };
 
     public Task<byte[]> GetFeatureAsync(byte reportId, CancellationToken cancellationToken) =>
         transport.GetFeatureAsync(DevicePath, reportId, budget ?? ReadBudget, cancellationToken);
@@ -91,9 +102,8 @@ internal abstract class HidProtocol(
     // on its own schedule, slower than the default budgets.
     public virtual TimeSpan? ReadBudget => null;
 
-    // Some HID devices (such as Rapoo office mice) do not send interrupt input reports
-    // upon query frames; their reports can only be retrieved via HidD_GetInputReport.
-    public virtual bool FallbackToGetInputReport => false;
+    // Override to false for a device that is read on Windows only.
+    public virtual bool SupportedOnLinux => true;
 
     public abstract IReadOnlyList<HidDeviceInfo> Devices { get; }
 

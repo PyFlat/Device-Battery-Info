@@ -219,7 +219,9 @@ public sealed class HardwareTests
         var transport = new HidSharpTransport(Serilog.Core.Logger.None);
         var candidates = protocol
             .Devices.SelectMany(d => d.ProductIds)
-            .SelectMany(productId => transport.FindCandidates(protocol.VendorId, productId, interfaceNumber: null, 0))
+            .SelectMany(productId =>
+                transport.FindCandidates(protocol.VendorId, productId, interfaceNumber: null, 0)
+            )
             .Where(c =>
                 !c.CouldNotOpen
                 && c.OutputReportLength >= protocol.ReportLength
@@ -235,8 +237,7 @@ public sealed class HardwareTests
                 transport,
                 candidate.Path,
                 candidate.ProductId,
-                protocol.ReportKind,
-                fallbackToGetInputReport: protocol.FallbackToGetInputReport
+                protocol.ReportKind
             );
             try
             {
@@ -249,17 +250,22 @@ public sealed class HardwareTests
                 try
                 {
                     var reading = RapooOfficeProtocol.ParseBattery(report);
-                    parsed = $"{reading.Percent?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-"}% {reading.Status}";
+                    var percent =
+                        reading.Percent?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-";
+                    parsed = $"{percent}% {reading.Status}";
                 }
                 catch (InvalidOperationException exception)
                 {
                     parsed = exception.Message;
                 }
 
-                HardwareReport.Line(
-                    subject,
-                    $"{string.Join(" ", report.Take(16).Select(b => b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)))} = {parsed}"
+                var hex = string.Join(
+                    " ",
+                    report.Take(16).Select(b =>
+                        b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)
+                    )
                 );
+                HardwareReport.Line(subject, $"{hex} = {parsed}");
             }
             catch (Exception exception) when (exception is not OutOfMemoryException)
             {

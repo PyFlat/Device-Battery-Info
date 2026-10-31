@@ -321,6 +321,7 @@ public sealed class LinuxUdevRuleTests
             .Assembly.GetTypes()
             .Where(t => t is { IsAbstract: false } && t.IsAssignableTo(typeof(HidProtocol)))
             .Select(t => (HidProtocol)Activator.CreateInstance(t, nonPublic: true)!)
+            .Where(p => p.SupportedOnLinux)
             .SelectMany(p => p.Devices.SelectMany(d => d.ProductIds.Select(id => (p.VendorId, id))));
 
     // Without its line a model reads as not connected on Linux.
