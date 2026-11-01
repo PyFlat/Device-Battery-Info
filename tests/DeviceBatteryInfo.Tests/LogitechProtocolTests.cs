@@ -107,6 +107,14 @@ public sealed class LogitechProtocolTests
             Used.Add(devicePath);
             return Task.FromResult(request[2] == 0x00 ? FeatureAnswer : StatusAnswer);
         }
+
+        public Task<byte[]> ExchangeGetInputReportAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
     }
 
     [Test]

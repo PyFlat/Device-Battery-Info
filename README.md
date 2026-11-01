@@ -117,6 +117,7 @@ listed here is not supported even if it shares a brand or protocol with one that
 | Logitech | G Pro X 2 Lightspeed | Headset    | Dongle            | yes       | yes      | It reads nothing while the headset is off.                                                       |
 | Corsair  | VOID PRO Wireless    | Headset    | Dongle            | yes       | yes      | It reads nothing while the headset is off.                                                       |
 | Rapoo    | VT3 PRO              | Mouse      | Dongle or cable   | yes       | yes      | On the cable it reports only now and then, so the reading may go stale. No level while charging. |
+| Rapoo    | MT760                | Mouse      | Dongle            | yes       | yes      |                                                                                                  |
 | AULA     | F75                  | Keyboard   | 2.4G receiver     | yes       | yes      | No level while the cable is in, only that it charges. Not read in wired mode.                    |
 | Sony     | DualSense            | Controller | USB or Bluetooth  | 10% steps | yes      | The controller reports its level in steps of 10%.                                                |
 | MCHOSE   | V9 Pro               | Headset    | Dongle            | 10% steps | yes      | No level while charging, only that it charges. It reads nothing while the headset is off.        |

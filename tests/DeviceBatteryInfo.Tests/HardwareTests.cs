@@ -30,6 +30,7 @@ public sealed class HardwareTests
         new LogitechVoltageBatteryProtocol(),
         new CorsairProtocol(),
         new RapooProtocol(),
+        new RapooOfficeProtocol(),
         new AulaProtocol(),
         new SonyProtocol(),
         new MchoseProtocol(),
@@ -203,6 +204,68 @@ public sealed class HardwareTests
                     subject,
                     $"{string.Join(" ", report.Take(16).Select(b => b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)))} = {parsed}"
                 );
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                HardwareReport.Line(subject, "no answer: " + exception.Message);
+            }
+        }
+    }
+
+    [Test]
+    public async Task Reads_the_raw_rapoo_office_battery_report()
+    {
+        var protocol = new RapooOfficeProtocol();
+        var transport = new HidSharpTransport(Serilog.Core.Logger.None);
+        var candidates = protocol
+            .Devices.SelectMany(d => d.ProductIds)
+            .SelectMany(productId =>
+                transport.FindCandidates(protocol.VendorId, productId, interfaceNumber: null, 0)
+            )
+            .Where(c =>
+                !c.CouldNotOpen
+                && c.OutputReportLength >= protocol.ReportLength
+                && c.HasUsage(protocol.UsagePage, protocol.Usage)
+            )
+            .ToArray();
+        Assume.That(candidates, Is.Not.Empty, "No Rapoo office dongle is connected.");
+
+        foreach (var candidate in candidates)
+        {
+            var subject = $"Rapoo {DateTime.Now:HH:mm:ss}";
+            var channel = new HidChannel(
+                transport,
+                candidate.Path,
+                candidate.ProductId,
+                protocol.ReportKind
+            );
+            try
+            {
+                var report = await channel.ExchangeAsync(
+                    RapooOfficeProtocol.BuildBatteryRequest(),
+                    RapooOfficeProtocol.IsBatteryReply,
+                    CancellationToken.None
+                );
+                string parsed;
+                try
+                {
+                    var reading = RapooOfficeProtocol.ParseBattery(report);
+                    var percent =
+                        reading.Percent?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-";
+                    parsed = $"{percent}% {reading.Status}";
+                }
+                catch (InvalidOperationException exception)
+                {
+                    parsed = exception.Message;
+                }
+
+                var hex = string.Join(
+                    " ",
+                    report.Take(16).Select(b =>
+                        b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)
+                    )
+                );
+                HardwareReport.Line(subject, $"{hex} = {parsed}");
             }
             catch (Exception exception) when (exception is not OutOfMemoryException)
             {

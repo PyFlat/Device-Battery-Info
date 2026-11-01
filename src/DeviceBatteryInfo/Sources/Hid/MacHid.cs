@@ -18,6 +18,7 @@ internal sealed record MacHidEntry(
 
 internal enum MacHidReportType
 {
+    Input = 0,
     Output = 1,
     Feature = 2,
 }
@@ -434,6 +435,24 @@ internal sealed class MacHidDevice : IDisposable
         var data = new byte[report.Length - 1];
         nint read = data.Length;
         Check(IOHIDDeviceGetReport(_device, (int)MacHidReportType.Feature, 0, data, ref read), "IOHIDDeviceGetReport");
+        data.AsSpan(0, (int)read).CopyTo(report.AsSpan(1));
+    }
+
+    public void GetInputReport(byte[] report)
+    {
+        if (report[0] != 0)
+        {
+            nint length = report.Length;
+            Check(
+                IOHIDDeviceGetReport(_device, (int)MacHidReportType.Input, report[0], report, ref length),
+                "IOHIDDeviceGetReport"
+            );
+            return;
+        }
+
+        var data = new byte[report.Length - 1];
+        nint read = data.Length;
+        Check(IOHIDDeviceGetReport(_device, (int)MacHidReportType.Input, 0, data, ref read), "IOHIDDeviceGetReport");
         data.AsSpan(0, (int)read).CopyTo(report.AsSpan(1));
     }
 

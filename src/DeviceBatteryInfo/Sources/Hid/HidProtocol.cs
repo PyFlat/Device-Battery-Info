@@ -15,6 +15,9 @@ internal enum HidReportKind
 
     // Output report out, input reports back, on a vendor usage page (Logitech HID++).
     InputOutput,
+
+    // Output report out, input report fetched with GetInputReport rather than streamed (Rapoo office).
+    GetInputReport,
 }
 
 internal sealed class HidChannel(
@@ -41,21 +44,31 @@ internal sealed class HidChannel(
         Func<byte[], bool> isComplete,
         CancellationToken cancellationToken
     ) =>
-        kind == HidReportKind.Feature
-            ? transport.ExchangeAsync(
+        kind switch
+        {
+            HidReportKind.Feature => transport.ExchangeAsync(
                 DevicePath,
                 request,
                 isComplete,
                 budget ?? ReadBudget,
                 cancellationToken
-            )
-            : transport.ExchangeReportsAsync(
+            ),
+            HidReportKind.InputOutput => transport.ExchangeReportsAsync(
                 DevicePath,
                 request,
                 isComplete,
                 budget ?? ReadBudget,
                 cancellationToken
-            );
+            ),
+            HidReportKind.GetInputReport => transport.ExchangeGetInputReportAsync(
+                DevicePath,
+                request,
+                isComplete,
+                budget ?? ReadBudget,
+                cancellationToken
+            ),
+            _ => throw new NotSupportedException($"Unsupported HID report kind: {kind}"),
+        };
 
     public Task<byte[]> GetFeatureAsync(byte reportId, CancellationToken cancellationToken) =>
         transport.GetFeatureAsync(DevicePath, reportId, budget ?? ReadBudget, cancellationToken);

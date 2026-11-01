@@ -47,6 +47,14 @@ public sealed class LogitechCenturionProtocolTests
                 : Task.FromResult(reply);
         }
 
+        public Task<byte[]> ExchangeGetInputReportAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
         private IEnumerable<byte[]> Replies(byte[] payload)
         {
             yield return Frame(0x07, 0x01, 0x05);

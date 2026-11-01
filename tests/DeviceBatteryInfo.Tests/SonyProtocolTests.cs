@@ -107,6 +107,14 @@ public sealed class SonyProtocolTests
                 : throw new InvalidOperationException("No matching report within the budget.");
         }
 
+        public Task<byte[]> ExchangeGetInputReportAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
         public Task<byte[]> GetFeatureAsync(
             string devicePath,
             byte reportId,

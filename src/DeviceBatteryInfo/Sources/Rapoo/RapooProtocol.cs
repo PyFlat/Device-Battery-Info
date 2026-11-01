@@ -58,3 +58,69 @@ internal sealed class RapooProtocol()
         };
     }
 }
+
+// MT-series office mice answer an active query on vendor collection FF00:000E.
+internal sealed class RapooOfficeProtocol()
+    : HidProtocol(
+        "Rapoo",
+        vendorId: 0x24AE,
+        reportLength: FrameLength,
+        HidReportKind.GetInputReport,
+        usagePage: 0xFF00,
+        usage: 0x000E
+    )
+{
+    private const int FrameLength = 32;
+    private const byte ReportId = 0xBA;
+    private const byte VendorPrefix = 0xA5;
+    private const byte BatteryCommand = 0xAA;
+
+    private const byte StatusSuccess = 0x01;
+    private const byte OnBattery = 0x01;
+    private const byte Charging = 0x02;
+
+    public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
+        [new("MT760", 0x1870)];
+
+    public override async Task<BatteryReading> ReadAsync(
+        HidChannel channel,
+        HidDeviceInfo device,
+        CancellationToken cancellationToken
+    ) => ParseBattery(await channel.ExchangeAsync(BuildBatteryRequest(), IsBatteryReply, cancellationToken));
+
+    internal static byte[] BuildBatteryRequest() =>
+    [
+        ReportId,
+        VendorPrefix,
+        BatteryCommand,
+        .. new byte[FrameLength - 3],
+    ];
+
+    internal static bool IsBatteryReply(byte[] report) =>
+        report.Length >= 3 && report[0] == StatusSuccess && report[2] is > 0 and <= 100;
+
+    internal static BatteryReading ParseBattery(ReadOnlySpan<byte> report)
+    {
+        var status = report[0];
+        if (status != StatusSuccess)
+        {
+            throw new InvalidOperationException($"The mouse reported non-success status 0x{status:X2}.");
+        }
+
+        var state = report[1];
+        var level = report[2];
+
+        if (level is 0 or > 100)
+        {
+            throw new InvalidOperationException($"The mouse reported invalid battery percentage {level}%.");
+        }
+
+        return state switch
+        {
+            Charging when level >= 100 => BatteryReading.FromPercent(level, BatteryStatus.Full),
+            Charging => BatteryReading.FromPercent(level, BatteryStatus.Charging),
+            OnBattery => BatteryReading.FromPercent(level, BatteryStatus.Discharging),
+            _ => BatteryReading.FromPercent(level),
+        };
+    }
+}

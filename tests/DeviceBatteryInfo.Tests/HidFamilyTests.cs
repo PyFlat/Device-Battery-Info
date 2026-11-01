@@ -35,6 +35,14 @@ public sealed class HidFamilyTests
             CancellationToken cancellationToken
         ) => throw new NotSupportedException();
 
+        public Task<byte[]> ExchangeGetInputReportAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
         public Task<byte[]> ExchangeAsync(
             string devicePath,
             byte[] request,
