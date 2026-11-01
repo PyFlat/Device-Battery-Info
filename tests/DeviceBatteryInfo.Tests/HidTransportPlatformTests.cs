@@ -312,6 +312,14 @@ public sealed class HidCollectionMatchingTests
             TimeSpan budget,
             CancellationToken cancellationToken
         ) => throw new InvalidOperationException("no answer");
+
+        public Task<byte[]> ExchangeGetInputReportAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
     }
 
     private static HidCandidate Headset(string path, params (int, int)[] usages) =>

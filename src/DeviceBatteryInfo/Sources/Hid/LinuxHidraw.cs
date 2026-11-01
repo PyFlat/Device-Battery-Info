@@ -41,7 +41,7 @@ internal static class LinuxHidraw
         {
             return Open(devicePath);
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return null;
         }
@@ -67,7 +67,7 @@ internal static class LinuxHidraw
             GetInput(handle, report);
             return true;
         }
-        catch (Exception)
+        catch (IOException)
         {
             return false;
         }

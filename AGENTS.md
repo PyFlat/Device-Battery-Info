@@ -566,9 +566,9 @@ Design knowledge that is not obvious from the code alone:
   shorter than the push interval. A switched-off mouse is silent, so the read times out. PID `1215`
   is not the VT3 PRO id that the open-source Rapoo tools document (`1231`, `14A5`), and their report
   layouts do not apply to it. Rapoo office mice (`RapooOfficeProtocol`: MT760, dongle `1870`) talk
-  on vendor collection `FF00:000E` (32-byte reports, `HidReportKind.GetInputReport`) on Windows:
-  unlike the VT series, they require an active query report `BA A5 AA 00...`, answered by input
-  report `01 <state> <level>...`. State 1 is on battery, 2 charging; level 1..100. `Sources/Aula/AulaProtocol.cs`
+  on vendor collection `FF00:000E` (32-byte reports, `HidReportKind.GetInputReport`): unlike the VT
+  series, they require an active query report `BA A5 AA 00...`, answered by input report
+  `01 <state> <level>...`. State 1 is on battery, 2 charging; level 1..100. `Sources/Aula/AulaProtocol.cs`
   (F75 on the Compx receiver `3554:FA09`) sends the battery-hub / womier-l65-linux frame on
   `FF02:0002`: report `0x13`, command `0x4A`, 20 bytes, and the last byte is the byte sum of the rest.
   The reply has the level in byte 5 and the state in byte 6 (`0x01` on battery, `0x10` with the cable in).

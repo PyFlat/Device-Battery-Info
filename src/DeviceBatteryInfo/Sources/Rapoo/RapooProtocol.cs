@@ -82,8 +82,6 @@ internal sealed class RapooOfficeProtocol()
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
         [new("MT760", 0x1870)];
 
-    public override bool SupportedOnLinux => false;
-
     public override async Task<BatteryReading> ReadAsync(
         HidChannel channel,
         HidDeviceInfo device,

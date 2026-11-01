@@ -102,9 +102,6 @@ internal abstract class HidProtocol(
     // on its own schedule, slower than the default budgets.
     public virtual TimeSpan? ReadBudget => null;
 
-    // Override to false for a device that is read on Windows only.
-    public virtual bool SupportedOnLinux => true;
-
     public abstract IReadOnlyList<HidDeviceInfo> Devices { get; }
 
     // Send the request through the channel and parse the response. Throw when the device does not

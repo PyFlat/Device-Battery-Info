@@ -70,7 +70,7 @@ internal interface IHidTransport
         Func<byte[], bool> isComplete,
         TimeSpan budget,
         CancellationToken cancellationToken
-    ) => throw new NotSupportedException();
+    );
 
     // Reads one feature report without writing anything first (unlike ExchangeAsync).
     Task<byte[]> GetFeatureAsync(
@@ -392,7 +392,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
             cancellationToken
         );
 
-    private static async Task<byte[]> ExchangeGetInputReportsAsync(
+    private async Task<byte[]> ExchangeGetInputReportsAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
@@ -425,9 +425,19 @@ internal sealed partial class HidSharpTransport : IHidTransport
 
                     Thread.Sleep(SettleDelay(attempt));
 
-                    if (stream.GetInputReport(reportId) is { } input && isComplete(input))
+                    if (stream.GetInputReport(reportId) is { } input)
                     {
-                        return input;
+                        if (isComplete(input))
+                        {
+                            return input;
+                        }
+
+                        _logger.Debug(
+                            "HID get-input-report on {Path} not ready, attempt {Attempt}: {Response}",
+                            devicePath,
+                            attempt,
+                            Convert.ToHexString(input)
+                        );
                     }
 
                     Thread.Sleep(NextRetryDelay());
@@ -744,7 +754,7 @@ internal sealed class MacReportStream : IReportStream
             _device.GetInputReport(input);
             return input;
         }
-        catch (Exception)
+        catch (IOException)
         {
             return null;
         }

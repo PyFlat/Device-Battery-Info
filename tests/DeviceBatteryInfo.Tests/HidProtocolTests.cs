@@ -35,7 +35,8 @@ public sealed class HidProtocolTests
             0x0001,
             1,
             "Acme Air Mouse",
-            8
+            8,
+            OutputReportLength: 8
         );
 
         public IReadOnlyList<HidCandidate> FindCandidates(
@@ -54,6 +55,14 @@ public sealed class HidProtocolTests
             TimeSpan budget,
             CancellationToken cancellationToken
         ) => throw new NotSupportedException();
+
+        public Task<byte[]> ExchangeGetInputReportAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(new byte[] { 0x01, request[1], 88 });
 
         public Task<byte[]> ExchangeAsync(
             string devicePath,
@@ -87,6 +96,51 @@ public sealed class HidProtocolTests
 
         var reading = await sources.Single().ReadAsync(CancellationToken.None);
         Assert.That(reading.Percent, Is.EqualTo(77));
+    }
+
+    private sealed class AcmeOfficeProtocol()
+        : HidProtocol("Acme", vendorId: 0x1234, reportLength: 8, reportKind: HidReportKind.GetInputReport)
+    {
+        public override IReadOnlyList<HidDeviceInfo> Devices { get; } = [new("Air Mouse", 0x0001)];
+
+        public override async Task<BatteryReading> ReadAsync(
+            HidChannel channel,
+            HidDeviceInfo device,
+            CancellationToken cancellationToken
+        )
+        {
+            var response = await channel.ExchangeAsync(
+                [0x00, 0xB0],
+                r => r.Length > 2 && r[1] == 0xB0,
+                cancellationToken
+            );
+            return BatteryReading.FromPercent(response[2]);
+        }
+    }
+
+    [Test]
+    public async Task A_protocol_can_exchange_via_get_input_report()
+    {
+        var devices = new DeviceCatalog();
+        devices.Set(
+            [
+                new BatterySlot(
+                    "air",
+                    "Air",
+                    BatterySourceKind.Mouse,
+                    DeviceType.Catalog,
+                    CatalogDeviceId: "acme-air-mouse"
+                ),
+            ]
+        );
+        var family = new HidFamily([new AcmeOfficeProtocol()], new FakeTransport(), Serilog.Core.Logger.None);
+
+        var sources = await new DeviceFamilyProvider([family], devices).DiscoverAsync(
+            CancellationToken.None
+        );
+
+        var reading = await sources.Single().ReadAsync(CancellationToken.None);
+        Assert.That(reading.Percent, Is.EqualTo(88));
     }
 
     private sealed class DongleOrCableProtocol()
@@ -129,6 +183,14 @@ public sealed class HidProtocolTests
         public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => [Dongle, Cable];
 
         public Task<byte[]> ExchangeReportsAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
+        public Task<byte[]> ExchangeGetInputReportAsync(
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
@@ -231,6 +293,14 @@ public sealed class HidProtocolTests
         public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => [Device];
 
         public Task<byte[]> ExchangeReportsAsync(
+            string devicePath,
+            byte[] request,
+            Func<byte[], bool> isComplete,
+            TimeSpan budget,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
+        public Task<byte[]> ExchangeGetInputReportAsync(
             string devicePath,
             byte[] request,
             Func<byte[], bool> isComplete,
