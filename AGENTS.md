@@ -568,17 +568,18 @@ Design knowledge that is not obvious from the code alone:
   layouts do not apply to it. Rapoo office mice (`RapooOfficeProtocol`: MT760, dongle `1870`) talk
   on vendor collection `FF00:000E` (32-byte reports, `HidReportKind.GetInputReport`): unlike the VT
   series, they require an active query report `BA A5 AA 00...`, answered by input report
-  `01 <state> <level>...`. State 1 is on battery, 2 charging; level 1..100. `Sources/Aula/AulaProtocol.cs`
-  (F75 on the Compx receiver `3554:FA09`) sends the battery-hub / womier-l65-linux frame on
-  `FF02:0002`: report `0x13`, command `0x4A`, 20 bytes, and the last byte is the byte sum of the rest.
-  The reply has the level in byte 5 and the state in byte 6 (`0x01` on battery, `0x10` with the cable in).
-  With the cable in the level always reads 100, even at a real 97%, so that reads as Charging with no
-  percent (charging and full cannot be told apart). The receiver also pushes unsolicited `0x13 0A`
-  frames, so a reply must match the command and the checksum. In wired mode the
-  keyboard enumerates as a separate Sinowealth device (`258A:010C`), with an unknown protocol, and is
-  not read. Command `0x44` returns a 10-frame configuration dump (probably lighting) that is not
-  mapped. The 8BitDo Ultimate (`2DC8:3106`) is deliberately absent: its dongle presents an
-  XInput *wired* pad (`WIRED`/`FULL`) and has no vendor collection, so no battery reaches the PC.
+  `01 <state> <level>...`. State 1 is on battery, 2 charging; level 1..100.
+  `Sources/Aula/AulaProtocol.cs` (F75 on the Compx receiver `3554:FA09`) sends the battery-hub /
+  womier-l65-linux frame on `FF02:0002`: report `0x13`, command `0x4A`, 20 bytes, and the last byte
+  is the byte sum of the rest. The reply has the level in byte 5 and the state in byte 6 (`0x01` on
+  battery, `0x10` with the cable in). With the cable in the level always reads 100, even at a real
+  97%, so that reads as Charging with no percent (charging and full cannot be told apart). The
+  receiver also pushes unsolicited `0x13 0A` frames, so a reply must match the command and the
+  checksum. In wired mode the keyboard enumerates as a separate Sinowealth device (`258A:010C`), with
+  an unknown protocol, and is not read. Command `0x44` returns a 10-frame configuration dump
+  (probably lighting) that is not mapped. The 8BitDo Ultimate (`2DC8:3106`) is deliberately absent:
+  its dongle presents an XInput *wired* pad (`WIRED`/`FULL`) and has no vendor collection, so no
+  battery reaches the PC.
 - **The DualSense needs one feature read over Bluetooth.** `Sources/Sony/SonyProtocol.cs` (`054C:0CE6`,
   gamepad collection `0001:0005`) only listens, like Rapoo; the controller streams hundreds of
   reports a second, so the default budgets suffice. The status byte (layout from Linux
