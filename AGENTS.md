@@ -62,7 +62,7 @@ src/DeviceBatteryInfo/
                            BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate),
                            ChargingInference (a rising level -> Charging, for sources that cannot tell)
   Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands
-                           Razer, Logitech, Corsair, Rapoo, Aula, Sony, Mchose), each a pure parser + an IO
+                           Razer, Logitech, Corsair, Rapoo, Aula, Sony, SteelSeries, Mchose), each a pure parser + an IO
                            wrapper behind an interface + IBatterySource(+Provider);
                            SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset,
                            Linux: /sys/class/power_supply) and Bluetooth has IBluetoothBatteryReader
@@ -97,7 +97,7 @@ tests/DeviceBatteryInfo.Tests/
   HidFamilyTests.cs               probing, path caching, identical units, refused (unopenable) devices
   HidProtocolTests.cs             a second protocol on the shared HID plumbing, dongle or cable, push-only
   <Brand>ProtocolTests.cs         per-brand HID frames captured on real hardware (Logitech, Corsair,
-                                  Rapoo, AULA, Sony, MCHOSE)
+                                  Rapoo, AULA, Sony, SteelSeries, MCHOSE)
   MacOsSourceTests.cs             pmset and system_profiler parsers, the Bluetooth snapshot, the system
                                   source
   LinuxSourceTests.cs             power_supply and BlueZ parsers, sysfs HID interface and unit keys

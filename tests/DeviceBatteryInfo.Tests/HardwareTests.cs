@@ -11,6 +11,7 @@ using DeviceBatteryInfo.Sources.Rapoo;
 using DeviceBatteryInfo.Sources.Razer;
 using DeviceBatteryInfo.Sources.SystemBattery;
 using DeviceBatteryInfo.Sources.Sony;
+using DeviceBatteryInfo.Sources.SteelSeries;
 using HidSharp;
 using NUnit.Framework;
 
@@ -33,6 +34,7 @@ public sealed class HardwareTests
         new RapooOfficeProtocol(),
         new AulaProtocol(),
         new SonyProtocol(),
+        new SteelSeriesProtocol(),
         new MchoseProtocol(),
     ];
 
