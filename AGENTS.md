@@ -62,8 +62,8 @@ src/DeviceBatteryInfo/
                            BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate),
                            ChargingInference (a rising level -> Charging, for sources that cannot tell)
   Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands
-                           Razer, Logitech, Corsair, Rapoo, Aula, Sony, SteelSeries, Mchose), each a pure parser + an IO
-                           wrapper behind an interface + IBatterySource(+Provider);
+                           Razer, Logitech, Corsair, Rapoo, Aula, Sony, SteelSeries, Mchose), each a
+                           pure parser + an IO wrapper behind an interface + IBatterySource(+Provider);
                            SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset,
                            Linux: /sys/class/power_supply) and Bluetooth has IBluetoothBatteryReader
                            (Windows: cfgmgr32, macOS: system_profiler plus pmset accps, Linux:
@@ -593,6 +593,17 @@ Design knowledge that is not obvious from the code alone:
   `IHidTransport.GetFeatureAsync`, which only reads; `ExchangeAsync` always writes a feature first,
   and writing `0x05` is something no reference implementation does. Lightbar, player LEDs, rumble
   and adaptive triggers live in output report `0x02` (USB) and are not used.
+- **The SteelSeries Rival 3 Wireless answers one output report.** `Sources/SteelSeries/SteelSeriesProtocol.cs`
+  (dongle `1038:1830`, `FFC0:0001` on interface 3, 65-byte reports, `HidReportKind.InputOutput`) writes
+  `AA 01`, the exchange rivalcfg documents, and the mouse answers report id 0 with the level in byte 1.
+  rivalcfg also reads a charging flag from the answer (byte 3 here, its `data[2]`); it is not used,
+  because the mouse runs on AAA cells and never charges. A switched-off mouse leaves the request
+  unanswered, so the read times out and the last value stays. The level is approximate: freshly
+  charged 1.2 V NiMH cells never read above 59%, and readings move by several points in the first minute
+  after power-on. `IsBatteryReport` accepts any report with id 0, which is safe on the evidence so far:
+  logged on Windows over the dongle while moving, clicking, scrolling and pressing the side and CPI
+  buttons, the interface carried only the answers to the plugin's polls, with no pushed reports.
+  Not tested: Bluetooth mode, Linux and macOS, and a mouse asleep after being idle.
 - **The MCHOSE V9 Pro was mapped from the owner's USB captures, then read through the plugin's hardware
   tests by the owner.** `Sources/Mchose/MchoseProtocol.cs` (dongle `291D:385D`, `FF90:0001`, 64-byte
   reports) writes `55 65 01`, which is what the MCHOSE app sends, and the dongle answers `55 65` with the
