@@ -759,10 +759,14 @@ A change is not done until all six hold:
    version. Otherwise only the matching versions are blocked. `reason` says why. Replace the package or
    restructure the code that needs it. Never work around a block by vendoring, renaming or loading the
    package some other way.
-3. **The Macro Deck SDK is at least `minimumSdkVersion`.** The Macro Deck packages
-   use the exact version in `Directory.Packages.props`. Bump it with `dotnet package update` before a
-   release that needs newer SDK surface, and never release with a `3.0.0-local.N` version from
-   `local-feed/`. A release must never be built against an SDK older than the minimum.
+3. **The Macro Deck SDK is at least `minimumSdkVersion`, and the CLI at least `minimumCliVersion`.** The
+   Macro Deck packages use the exact version in `Directory.Packages.props`. Bump all of them together
+   by editing that file before a release that needs newer SDK surface: `dotnet package update` fails
+   there with NU1109, because transitive pinning sees the packages it has not moved yet as a downgrade.
+   Keep `manifest.json` `compatibility.macroDeck` and the `cli-version` pin in
+   `.github/workflows/release.yml` in step (never drop that pin, it would float to the newest
+   prerelease). Never release with a `3.0.0-local.N` version from `local-feed/`. A release must never
+   be built against an SDK older than the minimum.
 4. **Only allowed Macro Deck packages are used.** Every package in the graph whose id starts with
    `MacroDeck.` must match an entry in `allowedMacroDeckPackages`. Anything else under that prefix is
    refused on upload, including packages from another Macro Deck repository that were never published

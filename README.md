@@ -1,5 +1,12 @@
 # Device Battery Info
 
+<a href="https://macro-deck.app/store/com.pyflat.device-battery-info">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://assets.macro-deck.app/branding/Open%20in%20the%20Macro%20Deck%20Store%20Badge%20Dark.png">
+    <img alt="Open in the Macro Deck Store" src="https://assets.macro-deck.app/branding/Open%20in%20the%20Macro%20Deck%20Store%20Badge%20Light.png" height="56">
+  </picture>
+</a>
+
 A [Macro Deck 3](https://macro-deck.app/) plugin that shows the battery level of your computer
 (Windows, macOS or Linux), your Android phone, your Bluetooth devices and a growing list of specific gaming
 peripherals, right on your deck.
