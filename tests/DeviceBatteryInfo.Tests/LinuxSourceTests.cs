@@ -364,10 +364,25 @@ public sealed class LinuxUdevRuleTests
         var guide = RepositoryFile("docs", "linux-setup.md");
         var lines = RuleFile().TrimEnd('\n').Split('\n');
 
+        var printed = guide
+            .Split('\n')
+            .SkipWhile(line => line != @"printf '%s\n' \")
+            .Skip(1)
+            .TakeWhile(line => !line.StartsWith("  | sudo tee ", StringComparison.Ordinal))
+            .ToArray();
+
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(lines.Where(line => !guide.Contains($"'{line}'", StringComparison.Ordinal)), Is.Empty);
+            Assert.That(printed.Where(line => !IsPrintfArgument(line)), Is.Empty);
+            Assert.That(printed.Where(IsPrintfArgument).Select(line => line[3..^3]), Is.EqualTo(lines));
             Assert.That(guide, Does.Not.Contain("curl"));
         }
     }
+
+    // A quote inside a line would end the shell string early, so no rule line may contain one.
+    private static bool IsPrintfArgument(string line) =>
+        line.Length >= 6
+        && line.StartsWith("  '", StringComparison.Ordinal)
+        && line.EndsWith("' \\", StringComparison.Ordinal)
+        && !line[3..^3].Contains('\'');
 }
