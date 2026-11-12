@@ -586,7 +586,8 @@ Design knowledge that is not obvious from the code alone:
   hid-playstation) is byte 53 of the 64-byte USB report `0x01`, or byte 54 of the 78-byte Bluetooth
   report `0x31`: the low nibble is the level in tenths (shown as level x 10, which matches what
   the user sees elsewhere, not hid-playstation's x 10 + 5), the high nibble 0 discharging, 1
-  charging, 2 full. A fresh Bluetooth link sends only a short `0x01` report with no battery;
+  charging, 2 full. Full always reads 100, as in hid-playstation: a user saw the nibble stay at 8
+  while full, so the plugin showed 80% against a full battery in PlayStation Accessories. A fresh Bluetooth link sends only a short `0x01` report with no battery;
   reading feature `0x05` (calibration) switches it to `0x31` until it disconnects. Verified on
   real hardware by reconnecting the controller: only `0x01` before, `0x31` right after the read.
   Nothing on this Windows (GameInput, Edge) did that switch on its own. That read goes through

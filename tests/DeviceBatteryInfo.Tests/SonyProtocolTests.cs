@@ -51,6 +51,18 @@ public sealed class SonyProtocolTests
     }
 
     [Test]
+    public void A_full_controller_reads_100_whatever_its_level()
+    {
+        var reading = SonyProtocol.ParseStatus(BluetoothFullReport(0x28));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(reading.Percent, Is.EqualTo(100));
+            Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Full));
+        }
+    }
+
+    [Test]
     public void The_short_bluetooth_report_carries_no_status() =>
         Assert.That(SonyProtocol.IsStatusReport(BluetoothShortReport()), Is.False);
 

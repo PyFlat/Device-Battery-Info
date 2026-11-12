@@ -68,7 +68,8 @@ internal sealed class SonyProtocol()
         {
             Discharging => BatteryReading.FromPercent(percent, BatteryStatus.Discharging),
             Charging => BatteryReading.FromPercent(percent, BatteryStatus.Charging),
-            Full => BatteryReading.FromPercent(percent, BatteryStatus.Full),
+            // The level nibble lags behind once full (seen reading 8), as hid-playstation also ignores it.
+            Full => BatteryReading.FromPercent(100, BatteryStatus.Full),
             var state => throw new InvalidOperationException($"The controller reported charge state {state}."),
         };
     }
