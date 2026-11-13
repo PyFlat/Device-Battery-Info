@@ -168,6 +168,26 @@ public sealed class RazerProtocolTests
     }
 
     [Test]
+    public void Basilisk_x_hyperspeed_uses_transaction_id_ff()
+    {
+        var request = RazerProtocol.BuildRequest(
+            RazerProtocol.CommandBatteryLevel,
+            RazerProtocol.TransactionIdFor(0x0083)
+        );
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(request[1], Is.EqualTo(0xFF));
+            // The checksum starts after the transaction id, so it does not change.
+            Assert.That(request[88], Is.EqualTo(0x02 ^ 0x07 ^ 0x80));
+            Assert.That(
+                RazerProtocol.TransactionIdFor(0x00B7),
+                Is.EqualTo(RazerProtocol.DefaultTransactionId)
+            );
+        }
+    }
+
+    [Test]
     public void Percent_scales_from_byte_range()
     {
         using (Assert.EnterMultipleScope())

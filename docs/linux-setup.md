@@ -73,6 +73,8 @@ printf '%s\n' \
   '# Razer Viper V3 Pro SE' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00df", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="00de", TAG+="uaccess"' \
+  '# Razer Basilisk X HyperSpeed' \
+  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="0083", TAG+="uaccess"' \
   '# Sony DualSense' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0ce6", TAG+="uaccess"' \
   '# Sony DualSense over Bluetooth, which has no USB attributes (bus 0005 in the HID device name)' \
