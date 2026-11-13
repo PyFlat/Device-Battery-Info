@@ -11,7 +11,14 @@ internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, R
     public const byte CommandBatteryLevel = 0x80;
     public const byte CommandChargingStatus = 0x84;
 
-    private const byte TransactionId = 0x1F;
+    internal const byte DefaultTransactionId = 0x1F;
+
+    // OpenRazer's 0xFF group (the first HyperSpeed receiver).
+    private static readonly HashSet<int> LegacyTransactionMice = [0x0083];
+
+    // Runs on an AA cell, so it never charges; OpenRazer never sends 0x84 to it.
+    private static readonly HashSet<int> CellPoweredMice = [0x0083];
+
     private const byte CommandClassPower = 0x07;
     private const byte StatusSuccessful = 0x02;
 
@@ -26,7 +33,8 @@ internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, R
             new("DeathAdder V3 Pro", 0x00B7, 0x00B6), 
             new("Basilisk V3 Pro", 0x00AB, 0x00AA),
             new("Viper V2 Pro", 0x00A6, 0x00A5),
-			new("Viper V3 Pro SE", 0x00DF, 0x00DE)
+			new("Viper V3 Pro SE", 0x00DF, 0x00DE),
+            new("Basilisk X HyperSpeed", 0x0083),
         ];
 
     public override async Task<BatteryReading> ReadAsync(
@@ -35,10 +43,17 @@ internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, R
         CancellationToken cancellationToken
     )
     {
+        var transactionId = TransactionIdFor(channel.ProductId);
         var percent = PercentFromRaw(
-            await QueryAsync(channel, CommandBatteryLevel, cancellationToken)
+            await QueryAsync(channel, transactionId, CommandBatteryLevel, cancellationToken)
         );
-        var charging = await QueryAsync(channel, CommandChargingStatus, cancellationToken) == 1;
+        if (CellPoweredMice.Contains(channel.ProductId))
+        {
+            return BatteryReading.FromPercent(percent, BatteryStatus.Discharging);
+        }
+
+        var charging =
+            await QueryAsync(channel, transactionId, CommandChargingStatus, cancellationToken) == 1;
 
         return new BatteryReading
         {
@@ -52,22 +67,26 @@ internal sealed class RazerProtocol() : HidProtocol("Razer", vendorId: 0x1532, R
 
     internal static async Task<byte> QueryAsync(
         HidChannel channel,
+        byte transactionId,
         byte commandId,
         CancellationToken cancellationToken
     )
     {
         var response = await channel.ExchangeAsync(
-            BuildRequest(commandId),
+            BuildRequest(commandId, transactionId),
             response => IsCompletedResponse(response, commandId),
             cancellationToken
         );
         return response[ValueIndex];
     }
 
-    internal static byte[] BuildRequest(byte commandId)
+    internal static byte TransactionIdFor(int productId) =>
+        LegacyTransactionMice.Contains(productId) ? (byte)0xFF : DefaultTransactionId;
+
+    internal static byte[] BuildRequest(byte commandId, byte transactionId = DefaultTransactionId)
     {
         var report = new byte[RequestLength];
-        report[1] = TransactionId;
+        report[1] = transactionId;
         report[5] = 0x02;
         report[6] = CommandClassPower;
         report[7] = commandId;
