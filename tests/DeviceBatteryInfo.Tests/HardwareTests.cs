@@ -3,6 +3,7 @@ using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources;
 using DeviceBatteryInfo.Sources.Bluetooth;
 using DeviceBatteryInfo.Sources.Hid;
+using DeviceBatteryInfo.Sources.Asus;
 using DeviceBatteryInfo.Sources.Aula;
 using DeviceBatteryInfo.Sources.Corsair;
 using DeviceBatteryInfo.Sources.Logitech;
@@ -36,6 +37,7 @@ public sealed class HardwareTests
         new SonyProtocol(),
         new SteelSeriesProtocol(),
         new MchoseProtocol(),
+        new AsusProtocol(),
     ];
 
     [SetUp]
