@@ -56,6 +56,8 @@ printf '%s\n' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="291d", ATTRS{idProduct}=="385d", TAG+="uaccess"' \
   '# SteelSeries Rival 3 Wireless' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1038", ATTRS{idProduct}=="1830", TAG+="uaccess"' \
+  '# Logitech G435 (probe build only)' \
+  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0adf", TAG+="uaccess"' \
   '# Rapoo VT3 PRO' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="24ae", ATTRS{idProduct}=="1215", TAG+="uaccess"' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="24ae", ATTRS{idProduct}=="4415", TAG+="uaccess"' \
