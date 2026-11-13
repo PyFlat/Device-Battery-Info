@@ -37,6 +37,39 @@ public sealed class HidTransportPlatformTests
         public void Dispose() => Disposed.TrySetResult();
     }
 
+    [Test]
+    public void A_null_usage_matches_any_usage_on_the_page()
+    {
+        var collections = new HidCandidate(
+            "p",
+            0x0B05,
+            0x1949,
+            0,
+            "Mouse",
+            0,
+            Usages: [(0x0001, 0x0002), (0xFF01, 0x0001)]
+        );
+        var windows = new HidCandidate(
+            "p",
+            0x0B05,
+            0x1949,
+            0,
+            "Mouse",
+            0,
+            UsagePage: 0xFF01,
+            Usage: 0x0001
+        );
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(collections.HasUsage(0xFF01, null), Is.True);
+            Assert.That(collections.HasUsage(0xFF02, null), Is.False);
+            Assert.That(collections.HasUsage(0xFF01, 0x0002), Is.False);
+            Assert.That(windows.HasUsage(0xFF01, null), Is.True);
+            Assert.That(windows.HasUsage(0xFF00, null), Is.False);
+        }
+    }
+
     private static HidSharpTransport Transport(Func<string, IFeatureChannel> open, bool bound) =>
         new(Serilog.Core.Logger.None, open, bound);
 

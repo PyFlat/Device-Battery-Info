@@ -24,8 +24,11 @@ internal sealed record HidCandidate(
 {
     // macOS and Linux present one device per interface with every top-level collection inside it, Windows one
     // per collection, so the first usage alone is not enough to find a vendor collection.
+    // A null usage matches any usage on the page.
     public bool HasUsage(int? page, int? usage) =>
-        Usages is { } all ? all.Contains((page ?? -1, usage ?? -1)) : UsagePage == page && Usage == usage;
+        Usages is { } all
+            ? usage is null ? all.Any(u => u.Page == (page ?? -1)) : all.Contains((page ?? -1, usage.Value))
+            : UsagePage == page && (usage is null || Usage == usage);
 
     // Every HID interface has at least one report, so no length at all means it could not be opened: on Linux
     // a hidraw node without the udev rule, which would otherwise look exactly like an absent device.
