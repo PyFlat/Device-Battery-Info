@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources.Hid;
+using Serilog;
 
 namespace DeviceBatteryInfo.Sources.Asus;
 
@@ -11,9 +13,16 @@ internal sealed class AsusProtocol()
         vendorId: 0x0B05,
         reportLength: 65,
         HidReportKind.InputOutput,
-        usagePage: 0xFF01
+        usagePage: 0xFF01,
+        usage: 0x0001
     )
 {
+    private readonly ILogger? _logger;
+    private readonly ConcurrentDictionary<string, string> _lastFrames = new(StringComparer.Ordinal);
+
+    public AsusProtocol(ILogger logger)
+        : this() => _logger = logger.ForContext<AsusProtocol>();
+
     private static readonly byte[] BatteryRequest = [ReportId, 0x12, 0x07];
 
     private const byte ReportId = 0x00;
@@ -30,7 +39,29 @@ internal sealed class AsusProtocol()
         HidChannel channel,
         HidDeviceInfo device,
         CancellationToken cancellationToken
-    ) => ParseBattery(await channel.ExchangeAsync(BatteryRequest, IsAnswer, cancellationToken));
+    )
+    {
+        var report = await channel.ExchangeAsync(BatteryRequest, IsAnswer, cancellationToken);
+        LogFrameChange(channel, report);
+        return ParseBattery(report);
+    }
+
+    // Test build only: the charging flag never set on a real mouse, so the raw answer is logged.
+    private void LogFrameChange(HidChannel channel, byte[] report)
+    {
+        var frame = Convert.ToHexString(report, 0, Math.Min(report.Length, 16));
+        if (_lastFrames.TryGetValue(channel.DevicePath, out var last) && last == frame)
+        {
+            return;
+        }
+
+        _lastFrames[channel.DevicePath] = frame;
+        _logger?.Information(
+            "ASUS battery answer on PID {ProductId:X4}: {Frame}",
+            channel.ProductId,
+            frame
+        );
+    }
 
     // A dongle whose mouse is asleep or off answers FF AA instead.
     internal static bool IsAnswer(byte[] report) =>
