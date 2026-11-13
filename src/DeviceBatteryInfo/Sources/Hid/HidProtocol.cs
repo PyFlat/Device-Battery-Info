@@ -93,7 +93,7 @@ internal abstract class HidProtocol(
 
     public HidReportKind ReportKind { get; } = reportKind;
 
-    // InputOutput only: the vendor usage of the right interface. Leave the usage null to match the page alone.
+    // InputOutput only: the vendor usage of the right interface.
     public int? UsagePage { get; } = usagePage;
 
     public int? Usage { get; } = usage;
