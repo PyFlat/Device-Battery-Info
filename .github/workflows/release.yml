@@ -19,6 +19,7 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       changelog: ${{ steps.notes.outputs.changelog }}
+      prerelease: ${{ steps.branch.outputs.prerelease }}
 
     steps:
       - name: Determine tag and version
@@ -34,6 +35,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
 
       # publish-plugin.yml builds github.sha, not the tag input
       - name: Verify the run is for the tagged commit
@@ -50,6 +52,15 @@ jobs:
           if [ "$manifestVersion" != "${{ steps.tag.outputs.version }}" ]; then
             echo "::error::manifest.json version ($manifestVersion) does not match tag ${{ steps.tag.outputs.tag }}. Bump manifest.json's version, commit that, then tag the new commit."
             exit 1
+          fi
+
+      - name: Check whether the tag is on the default branch
+        id: branch
+        run: |
+          if git merge-base --is-ancestor HEAD "origin/${{ github.event.repository.default_branch }}"; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate release notes
@@ -92,8 +103,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           CHANGELOG: ${{ needs.prepare.outputs.changelog }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
         run: |
           printf '%s\n' "$CHANGELOG" > notes.md
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
           gh release create "${{ needs.prepare.outputs.tag }}" artifacts/*.macroDeckPlugin \
             --title "${{ needs.prepare.outputs.tag }}" \
-            --notes-file notes.md
+            --notes-file notes.md \
+            "${flags[@]}"
