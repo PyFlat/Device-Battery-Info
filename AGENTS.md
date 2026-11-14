@@ -507,8 +507,8 @@ Design knowledge that is not obvious from the code alone:
   how "the mouse is not on this link" looks. Never read that as a wrong transaction id: `0x1F`, `0x3F`,
   `0x08`, `0x88`, `0x00`, `0x1E`, `0x9F` and `0x80` were all measured against a wired Basilisk V3 Pro and
   every one of them answered `0x04` on the idle dongle and succeeded on the cable. The Basilisk X
-  HyperSpeed (dongle `0x0083`, no cable mode) is the exception taken from OpenRazer, not measured: it
-  sits in OpenRazer's `0xFF` transaction-id group, and it runs on an AA cell, so OpenRazer never sends it
+  HyperSpeed (dongle `0x0083`, no cable mode) is the exception, taken from OpenRazer and confirmed by its
+  owner on the real mouse: it sits in OpenRazer's `0xFF` transaction-id group, and it runs on an AA cell, so OpenRazer never sends it
   `0x84` and the plugin reads it as Discharging (`RazerProtocol.TransactionIdFor`, `CellPoweredMice`).
   `FindCandidates` orders by interface ascending; `HidFamily` probes
   each once with the shorter `HidChannel.ProbeBudget` (for both report kinds), so a silent interface
