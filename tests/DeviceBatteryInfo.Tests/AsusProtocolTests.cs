@@ -4,53 +4,52 @@ using NUnit.Framework;
 
 namespace DeviceBatteryInfo.Tests;
 
-// Built from G-Helper's layout (AsusMouse.cs, StrixImpactIIWireless.cs), not yet captured on the mouse.
 [TestFixture]
 public sealed class AsusProtocolTests
 {
-    private static byte[] Answer(byte level, byte charging)
-    {
-        var report = new byte[65];
-        report[1] = 0x12;
-        report[2] = 0x07;
-        report[5] = level;
-        report[10] = charging;
-        return report;
-    }
+    // Logged by the owner on a Strix Impact II Wireless, trimmed from 65 bytes: on battery over the dongle,
+    // the same mouse on its cable (it reads a step high there), and the dongle while the mouse is on the cable.
+    private static readonly byte[] OnBattery = Convert.FromHexString("00120700000302010000000000000000");
+    private static readonly byte[] OnCable = Convert.FromHexString("00120700000402010000000000000000");
+    private static readonly byte[] Unreachable = Convert.FromHexString("00FFAA00000000000000000000000000");
 
-    private static byte[] Unreachable()
+    private static byte[] WithLevel(byte level)
     {
-        var report = new byte[65];
-        report[1] = 0xFF;
-        report[2] = 0xAA;
+        var report = OnBattery.ToArray();
+        report[5] = level;
         return report;
     }
 
     [Test]
-    public void Reads_the_level_in_quarters()
+    public void Reads_the_level_in_quarters_over_the_dongle()
     {
+        var reading = AsusProtocol.ParseBattery(OnBattery, onCable: false);
+
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(AsusProtocol.IsAnswer(Answer(3, 0)), Is.True);
-            Assert.That(AsusProtocol.ParseBattery(Answer(3, 0)).Percent, Is.EqualTo(75));
+            Assert.That(AsusProtocol.IsAnswer(OnBattery), Is.True);
+            Assert.That(reading.Percent, Is.EqualTo(75));
+            Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Discharging));
             Assert.That(
-                AsusProtocol.ParseBattery(Answer(3, 0)).Status,
-                Is.EqualTo(BatteryStatus.Discharging)
+                AsusProtocol.ParseBattery(OnCable, onCable: false).Status,
+                Is.EqualTo(BatteryStatus.Full)
             );
-            Assert.That(AsusProtocol.ParseBattery(Answer(4, 0)).Status, Is.EqualTo(BatteryStatus.Full));
         }
     }
 
     [Test]
-    public void Reads_charging()
+    public void On_the_cable_it_charges_with_no_level()
     {
-        var reading = AsusProtocol.ParseBattery(Answer(2, 1));
+        var reading = AsusProtocol.ParseBattery(OnCable, onCable: true);
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(reading.Percent, Is.EqualTo(50));
             Assert.That(reading.Status, Is.EqualTo(BatteryStatus.Charging));
-            Assert.That(AsusProtocol.ParseBattery(Answer(0, 1)).Percent, Is.EqualTo(0));
+            Assert.That(reading.Percent, Is.Null);
+            Assert.That(
+                AsusProtocol.ParseBattery(WithLevel(0), onCable: true).Status,
+                Is.EqualTo(BatteryStatus.Charging)
+            );
         }
     }
 
@@ -59,27 +58,33 @@ public sealed class AsusProtocolTests
     {
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(AsusProtocol.IsAnswer(Unreachable()), Is.True);
-            Assert.Throws<InvalidOperationException>(() => AsusProtocol.ParseBattery(Unreachable()));
+            Assert.That(AsusProtocol.IsAnswer(Unreachable), Is.True);
+            Assert.Throws<InvalidOperationException>(() =>
+                AsusProtocol.ParseBattery(Unreachable, onCable: false)
+            );
         }
     }
 
     [Test]
-    public void Level_0_off_the_charger_is_no_reading()
+    public void Level_0_over_the_dongle_is_no_reading()
     {
-        Assert.Throws<InvalidOperationException>(() => AsusProtocol.ParseBattery(Answer(0, 0)));
+        Assert.Throws<InvalidOperationException>(() =>
+            AsusProtocol.ParseBattery(WithLevel(0), onCable: false)
+        );
     }
 
     [Test]
     public void A_level_above_4_is_no_reading()
     {
-        Assert.Throws<InvalidOperationException>(() => AsusProtocol.ParseBattery(Answer(5, 0)));
+        Assert.Throws<InvalidOperationException>(() =>
+            AsusProtocol.ParseBattery(WithLevel(5), onCable: false)
+        );
     }
 
     [Test]
     public void Other_reports_are_not_the_answer()
     {
-        var other = Answer(3, 0);
+        var other = OnBattery.ToArray();
         other[2] = 0x04;
 
         using (Assert.EnterMultipleScope())

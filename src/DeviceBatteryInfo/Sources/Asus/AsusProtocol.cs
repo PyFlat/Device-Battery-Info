@@ -27,13 +27,16 @@ internal sealed class AsusProtocol()
 
     private const byte ReportId = 0x00;
     private const int LevelIndex = 5;
-    private const int ChargingIndex = 10;
+    private const int AnswerLength = 8;
+
+    // The mouse moves to its cable id as soon as the cable is in, so that id means it charges.
+    internal const int CableProductId = 0x1947;
 
     // The Strix Impact II Wireless reports its level in quarters (0-4).
     private const int LevelStep = 25;
 
     public override IReadOnlyList<HidDeviceInfo> Devices { get; } =
-        [new("ROG Strix Impact II Wireless", 0x1949, 0x1947)];
+        [new("ROG Strix Impact II Wireless", 0x1949, CableProductId)];
 
     public override async Task<BatteryReading> ReadAsync(
         HidChannel channel,
@@ -43,7 +46,7 @@ internal sealed class AsusProtocol()
     {
         var report = await channel.ExchangeAsync(BatteryRequest, IsAnswer, cancellationToken);
         LogFrameChange(channel, report);
-        return ParseBattery(report);
+        return ParseBattery(report, onCable: channel.ProductId == CableProductId);
     }
 
     // Test build only: the charging flag never set on a real mouse, so the raw answer is logged.
@@ -65,7 +68,7 @@ internal sealed class AsusProtocol()
 
     // A dongle whose mouse is asleep or off answers FF AA instead.
     internal static bool IsAnswer(byte[] report) =>
-        report.Length > ChargingIndex
+        report.Length >= AnswerLength
         && report[0] == ReportId
         && (IsBatteryReport(report) || IsMouseUnreachable(report));
 
@@ -73,7 +76,7 @@ internal sealed class AsusProtocol()
 
     private static bool IsMouseUnreachable(byte[] report) => report[1] == 0xFF && report[2] == 0xAA;
 
-    internal static BatteryReading ParseBattery(byte[] report)
+    internal static BatteryReading ParseBattery(byte[] report, bool onCable)
     {
         if (IsMouseUnreachable(report))
         {
@@ -81,14 +84,19 @@ internal sealed class AsusProtocol()
         }
 
         var level = report[LevelIndex];
-        var charging = report[ChargingIndex] > 0;
         if (level > 100 / LevelStep)
         {
             throw new InvalidOperationException($"The mouse reported level {level}.");
         }
 
-        // G-Helper reads a 0 off the charger as a mouse that is not ready, not as an empty battery.
-        if (level == 0 && !charging)
+        // On the cable the level reads a step high (4 against 3 on the dongle a moment later).
+        if (onCable)
+        {
+            return new BatteryReading { Status = BatteryStatus.Charging };
+        }
+
+        // G-Helper reads a 0 as a mouse that is not ready, not as an empty battery.
+        if (level == 0)
         {
             throw new InvalidOperationException("The mouse reported level 0: it is asleep or off.");
         }
@@ -96,9 +104,7 @@ internal sealed class AsusProtocol()
         var percent = level * LevelStep;
         return BatteryReading.FromPercent(
             percent,
-            charging ? BatteryStatus.Charging
-            : percent >= 100 ? BatteryStatus.Full
-            : BatteryStatus.Discharging
+            percent >= 100 ? BatteryStatus.Full : BatteryStatus.Discharging
         );
     }
 }

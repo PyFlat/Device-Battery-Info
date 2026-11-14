@@ -621,16 +621,18 @@ Design knowledge that is not obvious from the code alone:
   query unanswered, so the read times out; the dongle pushes `00 1A` once when it goes off, which also
   throws instead of publishing 0%. On battery the dongle pushes only on changes, so the read must ask.
   It also pushes `55 11 02` when the headset connects, which the reply match rejects.
-- **The ASUS ROG Strix Impact II Wireless was mapped from G-Helper, then read by the owner over the
-  dongle.** `Sources/Asus/AsusProtocol.cs` (dongle `0B05:1949`, cable `1947`, `FF01:0001` on interface 0,
+- **The ASUS ROG Strix Impact II Wireless was mapped from G-Helper, then read by the owner.**
+  `Sources/Asus/AsusProtocol.cs` (dongle `0B05:1949`, cable `1947`, `FF01:0001` on interface 0,
   confirmed from the owner's hardware ids, 65-byte reports, `HidReportKind.InputOutput`) writes `00 12 07`
-  and the mouse answers `00 12 07` with the level at byte 5 and, per G-Helper, a charging flag at byte 10.
-  This model reports the level in quarters (0-4, shown x 25), as G-Helper's model class does; most other
-  ROG mice answer 0-100 there. The level read correctly, but on the cable it stayed Discharging until it
-  showed Full at 100, so byte 10 never signalled charging; the test build logs every changed answer
-  (`ASUS battery answer on PID ...`) to find where the state is. A dongle whose mouse is asleep or off
-  answers `FF AA`, which is accepted as the answer and throws, so the probe does not wait out its budget;
-  a level 0 off the charger also throws, as G-Helper treats it as a mouse that is not ready.
+  and the mouse answers `00 12 07` with the level at byte 5 in quarters (0-4, shown x 25), as G-Helper's
+  model class does; most other ROG mice answer 0-100 there. G-Helper's charging flag at byte 10 is never
+  set on this mouse. Instead the mouse moves to its cable id `1947` as soon as the cable is in, while the
+  dongle answers `FF AA`, and on the cable the level reads a step high (4 against 3 on the dongle right
+  after unplugging), so an answer over `1947` reads as Charging with no percent, as on AULA and MCHOSE;
+  full cannot be told apart. `FF AA` is accepted as the answer and throws, so the probe does not wait out
+  its budget and moves on to the cable; a level 0 over the dongle also throws, as G-Helper treats it as a
+  mouse that is not ready. The test build logs every changed answer (`ASUS battery answer on PID ...`);
+  that logging goes before the merge.
 - **HID on macOS goes through IOKit directly (`Sources/Hid/MacHid.cs`), not through HidSharp.** HidSharp
   lists a device by `IORegistryEntryGetPath` and reopens it by `IORegistryEntryFromPath`, both capped at a
   512-byte `io_string_t`; a longer path fails with `kIOReturnBadArgument` and the device silently drops out
