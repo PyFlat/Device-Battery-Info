@@ -609,6 +609,17 @@ Design knowledge that is not obvious from the code alone:
   logged on Windows over the dongle while moving, clicking, scrolling and pressing the side and CPI
   buttons, the interface carried only the answers to the plugin's polls, with no pushed reports.
   Not tested: Bluetooth mode, Linux and macOS, and a mouse asleep after being idle.
+- **The SteelSeries Arctis GameBuds share that interface but not the exchange.** The same protocol picks
+  them by product id (dongle `1038:230A`) and writes `B0`, the status request HeadsetControl sends. Taken
+  from HeadsetControl, not measured: each bud's status is in bytes 4 and 5 (`03` out of the case, `02` in
+  it) and its level in percent in bytes 6 and 7, one byte later than HeadsetControl's indices because
+  byte 0 is the report id here. A bud in the case is switched off and reads 0%, so only buds out of the
+  case count, and the lower of them is shown, as HeadsetControl does. Both in the case throws, so the last
+  value stays. The buds report no charging state and the case has no wireless link, so it is always
+  Discharging. `IsGameBudsReport` only checks the report id, so a report the buds push on their own would
+  pass; the test build logs every report on the interface (`SteelSeries GameBuds answer`) to settle
+  whether the answer echoes `B0` in byte 1. Once it does, match on that and remove the logging before
+  the merge.
 - **The MCHOSE V9 Pro was mapped from the owner's USB captures, then read through the plugin's hardware
   tests by the owner.** `Sources/Mchose/MchoseProtocol.cs` (dongle `291D:385D`, `FF90:0001`, 64-byte
   reports) writes `55 65 01`, which is what the MCHOSE app sends, and the dongle answers `55 65` with the

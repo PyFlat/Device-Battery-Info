@@ -130,6 +130,7 @@ listed here is not supported even if it shares a brand or protocol with one that
 | Sony        | DualSense             | Controller | USB or Bluetooth  | 10% steps | yes      | The controller reports its level in steps of 10%.                                                |
 | MCHOSE      | V9 Pro                | Headset    | Dongle            | 10% steps | yes      | No level while charging, only that it charges. It reads nothing while the headset is off.        |
 | SteelSeries | Rival 3 Wireless      | Mouse      | 2.4G dongle       | approx.   | no       | Runs on AAA cells, so it never charges. The level is an estimate; rechargeable cells read low.   |
+| SteelSeries | Arctis GameBuds       | Earbuds    | 2.4G dongle       | yes       | no       | The lower level of the buds out of the case. Nothing while both are in the case.                 |
 
 The exact list is always the "Other devices" step of the config flow, which is built from the same
 code. If this table and the flow ever disagree, the flow is right; please fix the table.
