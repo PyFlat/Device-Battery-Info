@@ -43,11 +43,12 @@ internal static class BatteryWidgetTypes
             },
         ];
 
-    // Lets Macro Deck's Set Background Color and Set Label Color actions reach these widgets.
+    // Lets Macro Deck's Set Background Color, Set Label Color and Set Accent Color actions reach these widgets.
     private static readonly WidgetAppearanceProperty[] Appearance =
     [
         WidgetAppearanceProperty.BackgroundColor,
         WidgetAppearanceProperty.LabelColor,
+        WidgetAppearanceProperty.AccentColor,
     ];
 
     // Runs until the user gives the widget a Short Press action of their own; their action wins.
@@ -60,7 +61,7 @@ internal static class BatteryWidgetTypes
             : default;
 
     private const string DefaultData =
-        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100,"namePosition":"below","ringColor":"#FFFFFF","lowInRed":true}""";
+        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false,"ringSize":100,"namePosition":"below","accentColor":"#FFFFFF","lowInRed":true}""";
 
     private const string Schema = """
         {
@@ -134,10 +135,18 @@ internal static class BatteryWidgetTypes
               },
               "required": ["bands"]
             },
-            "ringColor": {
+            "accentColor": {
               "type": "string",
               "default": "#FFFFFF",
-              "description": "The ring, icon and bar colour of the 'custom' scheme, #rrggbb."
+              "description": "The ring, icon and bar colour of the 'custom' scheme, #rrggbb. Macro Deck's Set Accent Color action writes it."
+            },
+            "ringColor": {
+              "type": "string",
+              "description": "Older name of accentColor, read when accentColor is missing."
+            },
+            "iconColor": {
+              "type": "string",
+              "description": "Optional #rrggbb for every device icon, also tinting icons from the user's icon packs. Missing means the state colour for built-in symbols and the icon's own colours."
             },
             "lowInRed": {
               "type": "boolean",
@@ -153,7 +162,7 @@ internal static class BatteryWidgetTypes
             "icons": {
               "type": "object",
               "additionalProperties": { "type": ["object", "string", "null"] },
-              "description": "Per-device icons that replace the built-in symbol, keyed by device id (a hashed key for other plugins' devices): an icon-pack reference { \"type\": \"icon-pack\", \"reference\": \"<icon id>\" } or the bare icon id. The icon is drawn in its own colours."
+              "description": "Per-device icons that replace the built-in symbol, keyed by device id (a hashed key for other plugins' devices): an icon-pack reference { \"type\": \"icon-pack\", \"reference\": \"<icon id>\" } or the bare icon id. The icon is drawn in its own colours unless iconColor is set."
             },
             "flows": {
               "type": "array",

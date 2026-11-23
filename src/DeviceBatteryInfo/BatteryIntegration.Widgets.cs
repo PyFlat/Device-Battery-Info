@@ -415,12 +415,9 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 ? BatteryWidgetOptions.ParseNamePosition(namePositionValue.GetString())
                 : BatteryNamePosition.Below;
 
+        // Macro Deck's Set Accent Color action writes accentColor; ringColor is what older widgets stored.
         var ringColor =
-            obj.TryGetProperty("ringColor", out var ringColorValue)
-            && ringColorValue.ValueKind == JsonValueKind.String
-            && BatteryWidgetRow.IsHexColor(ringColorValue.GetString())
-                ? ringColorValue.GetString()!.ToUpperInvariant()
-                : BatteryWidgetRow.White;
+            HexColor(obj, "accentColor") ?? HexColor(obj, "ringColor") ?? BatteryWidgetRow.White;
 
         var thresholds =
             obj.TryGetProperty("thresholds", out var thresholdsValue)
@@ -456,9 +453,17 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             ringColor,
             Flag("lowInRed", true),
             thresholds,
-            icons
+            icons,
+            HexColor(obj, "iconColor")
         );
     }
+
+    private static string? HexColor(JsonElement obj, string key) =>
+        obj.TryGetProperty(key, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && BatteryWidgetRow.IsHexColor(value.GetString())
+            ? value.GetString()!.ToUpperInvariant()
+            : null;
 
     private static string? NonEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
