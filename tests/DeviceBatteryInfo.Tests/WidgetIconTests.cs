@@ -3,6 +3,8 @@ using System.Text.Json.Nodes;
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Ui;
+using MacroDeck.Plugin.Protocol.Capabilities.Ui;
+using MacroDeck.Plugin.Protocol.Serialization;
 using MacroDeck.Plugin.Testing;
 using MacroDeck.Sdk.Ui;
 using MacroDeck.Sdk.Widgets;
@@ -377,6 +379,39 @@ public sealed class WidgetIconTests
                 .Where(n => Type(n) == "icon")
                 .Select(Id),
             Is.EqualTo(new[] { "icons.headset" })
+        );
+    }
+
+    [Test]
+    public async Task Removing_an_icon_after_crossing_the_plugin_protocol_clears_it()
+    {
+        var view = ConfigView(
+            BatteryWidgetOptions.Default with
+            {
+                Icons = new Dictionary<string, Guid> { ["mouse"] = IconId },
+            }
+        );
+        _ = view.Tree;
+
+        var arguments = JsonSerializer.Deserialize<UiSessionEventArguments>(
+            """{"sessionId":"s","nodeId":"icons.mouse","name":"change","data":null}""",
+            PluginProtocolJson.Options
+        )!;
+        view.Dispatch(
+            new UiEvent
+            {
+                NodeId = arguments.NodeId,
+                Name = arguments.Name,
+                Data = arguments.Data,
+            }
+        );
+        await view.WhenIdleAsync();
+
+        Assert.That(
+            Nodes(JsonNode.Parse(UiCanonicalJson.Serialize(view.Tree.Root))!)
+                .Single(n => Id(n) == "icons.mouse")
+                .ToJsonString(),
+            Does.Not.Contain(IconId.ToString())
         );
     }
 
