@@ -30,9 +30,12 @@ Each device is drawn with an icon for its kind and a coloured ring, with a bolt 
 charges. For adb and Bluetooth devices you pick the icon when adding the device (phone, tablet, VR
 headset, speaker and more). On a widget's **Icons** tab you can replace the icon of any device it shows
 with one from your Macro Deck icon packs, including packs of your own images; it is drawn in its own
-colours. The colour scheme is a widget setting: by level with cyan while charging (the default), by
+colours unless you set an **icon colour** on the same tab, which recolours every device icon of the
+widget. The colour scheme is a widget setting: by level with cyan while charging (the default), by
 level only, green only, by device type, a smooth gradient, or one custom colour of your choice (for
-a black and white board, say). The level schemes have a colour threshold bar where you move, recolour,
+a black and white board, say). The custom colour is the widget's accent colour, so Macro Deck's
+**Set Accent Color** action can change it from a script or another button, just as Set Background
+Color and Set Label Color change the background and text. The level schemes have a colour threshold bar where you move, recolour,
 add and remove the colour bands (by default red up to the low-battery threshold, then orange, yellow
 and green). In the other schemes a level at or below the low-battery threshold is red, even while
 charging; only the custom colour lets you switch that off:
