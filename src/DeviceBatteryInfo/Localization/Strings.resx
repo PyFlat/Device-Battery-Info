@@ -201,6 +201,12 @@
     <data name="Widgets.Config.RingColor.Label" xml:space="preserve">
         <value>Ring colour</value>
     </data>
+    <data name="Widgets.Config.IconColor.Label" xml:space="preserve">
+        <value>Icon colour</value>
+    </data>
+    <data name="Widgets.Config.IconColor.Description" xml:space="preserve">
+        <value>Optional. Colours every device icon, including your own icons. Empty keeps the ring colour for the built-in symbols and your icons' own colours.</value>
+    </data>
     <data name="Widgets.Config.Thresholds.Label" xml:space="preserve">
         <value>Colour thresholds</value>
     </data>

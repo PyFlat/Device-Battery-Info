@@ -195,7 +195,7 @@ Design knowledge that is not obvious from the code alone:
   1 there and it disappears). `BatteryWidgetViewTests` checks every path against the renderer's
   grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
   colour (`BatteryWidgetRow.Color` for the widget's `colors` scheme, all Apple system colours so every
-  scheme has the same saturation, plus `custom`, one `ringColor` whose `lowInRed` switch is the only
+  scheme has the same saturation, plus `custom`, one ring colour whose `lowInRed` switch is the only
   way to drop the red; every scheme shows a stale or unknown level in grey) and the percentage uses the
   primary text role. The two level schemes colour by `thresholds`, a `UiThresholdsInput` (SDK beta.16,
   Macro Deck PR 1233) the user edits freely: null until edited, and then
@@ -258,8 +258,10 @@ Design knowledge that is not obvious from the code alone:
   colon), and every device keeps its state, so a deselected device keeps its icon. The data holds `icons.<row id> = { "type": "icon-pack", "reference": "<icon id>" }`;
   a bare id is accepted too. Each widget session resolves the ids through `UiResources.GetIconAsync` in
   the background (per session, because a replaced icon keeps its id and gets a new hash) and
-  re-renders; a missing icon is logged and the glyph stays. The image is untinted and needs an explicit
-  `Size` (`OfParent(1)` inside the glyph's box), or the reader draws it at its pixel size. The config
+  re-renders; a missing icon is logged and the glyph stays. The image needs an explicit
+  `Size` (`OfParent(1)` inside the glyph's box), or the reader draws it at its pixel size. The optional
+  `iconColor` (the colour field above the pickers) colours the built-in glyph and sets the image's
+  `Tint`; without it the glyph takes the state colour and the image keeps its own colours. The config
   flow cannot offer a per-device default yet: its dialog renders an `ActionParameter.Icon` as a text box.
 - **A short press refreshes until the user sets their own Short Press action.** Both widget types set
   `SupportsFlows` (Macro Deck PR 960), so the host runs the actions the user bound to the widget, like a
@@ -283,7 +285,11 @@ Design knowledge that is not obvious from the code alone:
   `BatteryWidgetOptions.BackgroundColor`/`TextColor`, the root stack's `Background` takes the stored
   value as is (`transparent` on the root drops the deck's tile face), and both descriptors declare
   them in `AppearanceProperties` so the Set Background Color / Set Label Color actions reach the
-  widgets. Secondary and muted text take the text colour with alpha (`#rrggbbCC`, `#rrggbb99`, SDK
+  widgets. The `custom` ring colour is stored as `accentColor` and `AccentColor` is declared too, so
+  the host's Set Accent Color action recolours rings from scripts and other buttons; `ringColor` is
+  the key older widgets stored and is read only when `accentColor` is missing. `IconColor` cannot be
+  declared: the host applies only `ProviderOptionalProperties` (background, label, label colour, font,
+  accent) to a plugin widget, and `IWidgetApi` offers no way to write another key. Secondary and muted text take the text colour with alpha (`#rrggbbCC`, `#rrggbb99`, SDK
   beta.16) so they stay fainter over any backdrop; a reader older than beta.16 draws the role colour.
   The gauge's `TrackColor` takes `#rrggbb` only, so it is the text colour mixed 20 % into a known opaque
   background, and the theme's track over the tile face or a transparent background.
