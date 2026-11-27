@@ -631,8 +631,10 @@ Design knowledge that is not obvious from the code alone:
   after unplugging), so an answer over `1947` reads as Charging with no percent, as on AULA and MCHOSE;
   full cannot be told apart. `FF AA` is accepted as the answer and throws, so the probe does not wait out
   its budget and moves on to the cable; a level 0 over the dongle also throws, as G-Helper treats it as a
-  mouse that is not ready. The test build logs every changed answer (`ASUS battery answer on PID ...`);
-  that logging goes before the merge.
+  mouse that is not ready. Back on the dongle the level still reads a step high for 10-30 s after
+  unplugging (4, then 3), so for `CableSettleTime` (60 s) after the last cable answer a dongle answer also
+  reads as Charging with no percent, instead of a false Full. That timestamp lives on the singleton
+  protocol, not per unit, as the cable and dongle paths of one mouse share nothing to key on.
 - **HID on macOS goes through IOKit directly (`Sources/Hid/MacHid.cs`), not through HidSharp.** HidSharp
   lists a device by `IORegistryEntryGetPath` and reopens it by `IORegistryEntryFromPath`, both capped at a
   512-byte `io_string_t`; a longer path fails with `kIOReturnBadArgument` and the device silently drops out
