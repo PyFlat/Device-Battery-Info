@@ -403,6 +403,7 @@ internal static class BatteryWidgetView
                 "glyph",
                 row,
                 color,
+                options.IconColor,
                 RingPart(
                     diameter,
                     (showPercent, nameInside) switch
@@ -513,6 +514,7 @@ internal static class BatteryWidgetView
         string key,
         BatteryWidgetRow row,
         string color,
+        string? iconColor,
         Func<UiLength> edge
     ) =>
         row.Icon is { } icon
@@ -524,9 +526,10 @@ internal static class BatteryWidgetView
                     Key = key + "-image",
                     Source = UiValue.Of(icon),
                     Size = UiSize.From(() => FillBox(edge())),
+                    Tint = iconColor is null ? UiValue.None<string>() : UiValue.Of(iconColor),
                 }
             )
-            : Glyph(key, DeviceGlyphs.For(row.Kind), color, edge);
+            : Glyph(key, DeviceGlyphs.For(row.Kind), iconColor ?? color, edge);
 
     // An unsized image draws at its pixel size.
     private static UiLength FillBox(UiLength edge) =>
@@ -626,7 +629,7 @@ internal static class BatteryWidgetView
 
         var line = new List<UiElement>
         {
-            DeviceIcon("glyph", row, color, () => UiLength.OfBasis(ListGlyph)),
+            DeviceIcon("glyph", row, color, options.IconColor, () => UiLength.OfBasis(ListGlyph)),
             new UiStack
             {
                 Key = "namegroup",

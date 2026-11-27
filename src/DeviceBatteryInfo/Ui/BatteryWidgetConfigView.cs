@@ -40,6 +40,7 @@ internal static class BatteryWidgetConfigView
         var title = new UiState<string>(current.Title);
         var colors = new UiState<string>(BatteryWidgetOptions.ColorsValue(current.Colors));
         var ringColor = new UiState<string>(current.RingColor);
+        var iconColor = new UiState<string>(current.IconColor ?? string.Empty);
         var lowInRed = new UiState<bool>(current.LowInRed);
         var listAlign = new UiState<string>(
             BatteryWidgetOptions.ListAlignValue(current.ListAlign)
@@ -194,7 +195,7 @@ internal static class BatteryWidgetConfigView
         appearance.Add(
             new UiColorInput
             {
-                Key = "ringColor",
+                Key = "accentColor",
                 Label = Strings.Widgets.Config.RingColor.Label(),
                 Binding = Bind.To(ringColor),
                 VisibleWhen = onlyCustom,
@@ -349,7 +350,17 @@ internal static class BatteryWidgetConfigView
                             Tab(
                                 "icons-tab",
                                 Strings.Widgets.Config.Tabs.Icons(),
-                                [IconsField(devices, current, sourceIds)]
+                                [
+                                    new UiColorInput
+                                    {
+                                        Key = "iconColor",
+                                        Label = Strings.Widgets.Config.IconColor.Label(),
+                                        Description = Strings.Widgets.Config.IconColor.Description(),
+                                        Binding = Bind.To(iconColor),
+                                        SupportsReset = true,
+                                    },
+                                    IconsField(devices, current, sourceIds),
+                                ]
                             ),
                             Tab("appearance-tab", Strings.Widgets.Config.Tabs.Appearance(), appearance),
                         ],

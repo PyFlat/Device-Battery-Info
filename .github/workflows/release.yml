@@ -83,7 +83,7 @@ jobs:
     with:
       version: ${{ needs.prepare.outputs.tag }}
       source: src/DeviceBatteryInfo
-      cli-version: 3.0.0
+      cli-version: 3.0.5
       changelog: ${{ needs.prepare.outputs.changelog }}
       upload-artifact: true
       artifact-name: plugin-package

@@ -213,7 +213,8 @@ internal sealed record BatteryWidgetOptions(
     string RingColor = BatteryWidgetRow.White,
     bool LowInRed = true,
     UiThresholds? Thresholds = null,
-    IReadOnlyDictionary<string, Guid>? Icons = null
+    IReadOnlyDictionary<string, Guid>? Icons = null,
+    string? IconColor = null
 )
 {
     public const string IconPackType = "icon-pack";

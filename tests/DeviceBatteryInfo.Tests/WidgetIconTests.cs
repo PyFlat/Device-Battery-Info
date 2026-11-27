@@ -3,8 +3,11 @@ using System.Text.Json.Nodes;
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.HostBatteries;
 using DeviceBatteryInfo.Ui;
+using MacroDeck.Plugin.Protocol.Capabilities.Ui;
+using MacroDeck.Plugin.Protocol.Serialization;
 using MacroDeck.Plugin.Testing;
 using MacroDeck.Sdk.Ui;
+using MacroDeck.Sdk.Widgets;
 using MacroDeck.Ui.Config;
 using MacroDeck.Ui.Model.Events;
 using MacroDeck.Ui.Model.Resources;
@@ -86,6 +89,81 @@ public sealed class WidgetIconTests
             Assert.That(withIcon.Where(IsGlyphShape), Is.Empty);
             Assert.That(withoutIcon.Where(n => Type(n) == "ui.image"), Is.Empty);
             Assert.That(withoutIcon.Where(IsGlyphShape), Is.Not.Empty);
+        }
+    }
+
+    [Test]
+    public void The_accent_colour_is_the_ring_colour_and_the_old_key_is_still_read()
+    {
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(
+                Parse("""{"accentColor":"#12ab34","ringColor":"#FF0000"}""").RingColor,
+                Is.EqualTo("#12AB34")
+            );
+            Assert.That(Parse("""{"ringColor":"#ff0000"}""").RingColor, Is.EqualTo("#FF0000"));
+            Assert.That(
+                Parse("""{"accentColor":"red","ringColor":"#FF0000"}""").RingColor,
+                Is.EqualTo("#FF0000")
+            );
+            Assert.That(Parse("{}").RingColor, Is.EqualTo(BatteryWidgetRow.White));
+            Assert.That(
+                BatteryWidgetTypes.All.Select(t => t.AppearanceProperties),
+                Is.All.Contains(WidgetAppearanceProperty.AccentColor)
+            );
+        }
+    }
+
+    [Test]
+    public void The_icon_colour_is_optional_and_must_be_a_hex()
+    {
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(Parse("""{"iconColor":"#00aaff"}""").IconColor, Is.EqualTo("#00AAFF"));
+            Assert.That(Parse("""{"iconColor":"blue"}""").IconColor, Is.Null);
+            Assert.That(Parse("{}").IconColor, Is.Null);
+        }
+    }
+
+    [TestCase(BatteryWidgetTypes.PanelId, BatteryWidgetOptions.LayoutRings)]
+    [TestCase(BatteryWidgetTypes.PanelId, BatteryWidgetOptions.LayoutList)]
+    [TestCase(BatteryWidgetTypes.TileId, BatteryWidgetOptions.LayoutRings)]
+    public void The_icon_colour_tints_picked_icons_and_colours_the_built_in_glyph(
+        string widgetId,
+        string layout
+    )
+    {
+        var options = BatteryWidgetOptions.Default with
+        {
+            Layout = BatteryWidgetOptions.ParseLayout(layout),
+            IconColor = "#00AAFF",
+        };
+        var withIcon = Nodes(Tree(widgetId, Row() with { Icon = Resource }, options)).ToArray();
+        var glyphs = Nodes(Tree(widgetId, Row(), options)).Where(IsGlyphShape).ToArray();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(
+                withIcon.Where(n => Type(n) == "ui.image").Select(n => n["properties"]?["tint"]?.GetValue<string>()),
+                Is.Not.Empty.And.All.EqualTo("#00AAFF")
+            );
+            Assert.That(
+                glyphs.Select(n => n["properties"]?["color"]?.GetValue<string>()),
+                Is.Not.Empty.And.All.EqualTo("#00AAFF")
+            );
+        }
+    }
+
+    [Test]
+    public void The_form_stores_the_ring_colour_as_the_accent_colour_and_offers_an_icon_colour()
+    {
+        var ids = Nodes(ConfigTree(BatteryWidgetOptions.Default)).Select(Id).ToArray();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(ids, Does.Contain("accentColor"));
+            Assert.That(ids, Does.Contain("iconColor"));
+            Assert.That(ids, Does.Not.Contain("ringColor"));
         }
     }
 
@@ -301,6 +379,39 @@ public sealed class WidgetIconTests
                 .Where(n => Type(n) == "icon")
                 .Select(Id),
             Is.EqualTo(new[] { "icons.headset" })
+        );
+    }
+
+    [Test]
+    public async Task Removing_an_icon_after_crossing_the_plugin_protocol_clears_it()
+    {
+        var view = ConfigView(
+            BatteryWidgetOptions.Default with
+            {
+                Icons = new Dictionary<string, Guid> { ["mouse"] = IconId },
+            }
+        );
+        _ = view.Tree;
+
+        var arguments = JsonSerializer.Deserialize<UiSessionEventArguments>(
+            """{"sessionId":"s","nodeId":"icons.mouse","name":"change","data":null}""",
+            PluginProtocolJson.Options
+        )!;
+        view.Dispatch(
+            new UiEvent
+            {
+                NodeId = arguments.NodeId,
+                Name = arguments.Name,
+                Data = arguments.Data,
+            }
+        );
+        await view.WhenIdleAsync();
+
+        Assert.That(
+            Nodes(JsonNode.Parse(UiCanonicalJson.Serialize(view.Tree.Root))!)
+                .Single(n => Id(n) == "icons.mouse")
+                .ToJsonString(),
+            Does.Not.Contain(IconId.ToString())
         );
     }
 
