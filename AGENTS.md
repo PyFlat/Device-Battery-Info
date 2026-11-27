@@ -62,7 +62,7 @@ src/DeviceBatteryInfo/
                            BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate),
                            ChargingInference (a rising level -> Charging, for sources that cannot tell)
   Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands
-                           Razer, Logitech, Corsair, Rapoo, Aula, Sony, SteelSeries, Mchose), each a
+                           Razer, Logitech, Corsair, Rapoo, Aula, Sony, SteelSeries, Mchose, Asus), each a
                            pure parser + an IO wrapper behind an interface + IBatterySource(+Provider);
                            SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset,
                            Linux: /sys/class/power_supply) and Bluetooth has IBluetoothBatteryReader
@@ -97,7 +97,7 @@ tests/DeviceBatteryInfo.Tests/
   HidFamilyTests.cs               probing, path caching, identical units, refused (unopenable) devices
   HidProtocolTests.cs             a second protocol on the shared HID plumbing, dongle or cable, push-only
   <Brand>ProtocolTests.cs         per-brand HID frames captured on real hardware (Logitech, Corsair,
-                                  Rapoo, AULA, Sony, SteelSeries, MCHOSE)
+                                  Rapoo, AULA, Sony, SteelSeries, MCHOSE, ASUS)
   MacOsSourceTests.cs             pmset and system_profiler parsers, the Bluetooth snapshot, the system
                                   source
   LinuxSourceTests.cs             power_supply and BlueZ parsers, sysfs HID interface and unit keys
@@ -627,6 +627,20 @@ Design knowledge that is not obvious from the code alone:
   query unanswered, so the read times out; the dongle pushes `00 1A` once when it goes off, which also
   throws instead of publishing 0%. On battery the dongle pushes only on changes, so the read must ask.
   It also pushes `55 11 02` when the headset connects, which the reply match rejects.
+- **The ASUS ROG Strix Impact II Wireless was mapped from G-Helper, then read by the owner.**
+  `Sources/Asus/AsusProtocol.cs` (dongle `0B05:1949`, cable `1947`, `FF01:0001` on interface 0,
+  confirmed from the owner's hardware ids, 65-byte reports, `HidReportKind.InputOutput`) writes `00 12 07`
+  and the mouse answers `00 12 07` with the level at byte 5 in quarters (0-4, shown x 25), as G-Helper's
+  model class does; most other ROG mice answer 0-100 there. G-Helper's charging flag at byte 10 is never
+  set on this mouse. Instead the mouse moves to its cable id `1947` as soon as the cable is in, while the
+  dongle answers `FF AA`, and on the cable the level reads a step high (4 against 3 on the dongle right
+  after unplugging), so an answer over `1947` reads as Charging with no percent, as on AULA and MCHOSE;
+  full cannot be told apart. `FF AA` is accepted as the answer and throws, so the probe does not wait out
+  its budget and moves on to the cable; a level 0 over the dongle also throws, as G-Helper treats it as a
+  mouse that is not ready. Back on the dongle the level still reads a step high for 10-30 s after
+  unplugging (4, then 3), so for `CableSettleTime` (60 s) after the last cable answer a dongle answer also
+  reads as Charging with no percent, instead of a false Full. That timestamp lives on the singleton
+  protocol, not per unit, as the cable and dongle paths of one mouse share nothing to key on.
 - **HID on macOS goes through IOKit directly (`Sources/Hid/MacHid.cs`), not through HidSharp.** HidSharp
   lists a device by `IORegistryEntryGetPath` and reopens it by `IORegistryEntryFromPath`, both capped at a
   512-byte `io_string_t`; a longer path fails with `kIOReturnBadArgument` and the device silently drops out
